@@ -16,6 +16,7 @@ from nd.formula import (
     Not,
     Or,
     Variable,
+    declared_arities,
     fresh_constant,
     fresh_variable,
     reset_arities,
@@ -307,6 +308,54 @@ class TestEqualityAndHashing(FormulaTestCase):
         self.assertEqual(assumptions[Atom("F", self.a)], "premise")
 
 
+class TestArgumentChecking(FormulaTestCase):
+    """A formula must not exist in a state where its methods would fail.
+
+    Passing a bare string is the easy slip: it used to build happily and
+    only break later, inside free_variables().
+    """
+
+    def test_a_string_is_not_a_term(self):
+        with self.assertRaises(TypeError) as caught:
+            Atom("P", "x")
+        message = str(caught.exception)
+        self.assertIn("must be a Term", message)
+        self.assertIn("Variable('x')", message)
+
+    def test_a_string_is_not_a_bound_variable(self):
+        with self.assertRaises(TypeError):
+            Exists("x", Atom("Q"))
+
+    def test_a_constant_cannot_be_bound(self):
+        with self.assertRaises(TypeError) as caught:
+            Forall(self.a, Atom("Q"))
+        self.assertIn("constant cannot be bound", str(caught.exception))
+
+    def test_a_string_is_not_a_formula(self):
+        with self.assertRaises(TypeError):
+            And(Atom("P"), "Q")
+        with self.assertRaises(TypeError):
+            Not("P")
+        with self.assertRaises(TypeError):
+            Implies("P", Atom("Q"))
+
+    def test_equality_takes_terms(self):
+        with self.assertRaises(TypeError):
+            Equality("a", "b")
+
+    def test_a_predicate_name_is_a_string(self):
+        with self.assertRaises(TypeError):
+            Atom(self.x)
+
+    def test_a_rejected_call_does_not_fix_an_arity(self):
+        # The check runs before the registry is touched, so 'P' is still
+        # free to be used at its intended arity afterwards.
+        with self.assertRaises(TypeError):
+            Atom("P", "x")
+        self.assertEqual(declared_arities(), {})
+        Atom("P")
+
+
 class TestConstruction(FormulaTestCase):
     def test_operators_match_the_named_constructors(self):
         p, q = Atom("P"), Atom("Q")
@@ -367,6 +416,24 @@ class TestPrinting(FormulaTestCase):
         p, q, r = Atom("P"), Atom("Q"), Atom("S")
         self.assertEqual(str(Implies(p, Implies(q, r))), "P → Q → S")
         self.assertEqual(str(Implies(Implies(p, q), r)), "(P → Q) → S")
+        self.assertEqual(str(Iff(p, Iff(q, r))), "P ↔ Q ↔ S")
+
+    def test_mixed_arrows_are_always_bracketed(self):
+        # The two share a precedence level, so 'P → Q ↔ S' would be
+        # unreadable; one is always bracketed inside the other.
+        p, q, r = Atom("P"), Atom("Q"), Atom("S")
+        self.assertEqual(str(Implies(p, Iff(q, r))), "P → (Q ↔ S)")
+        self.assertEqual(str(Iff(Implies(p, q), r)), "(P → Q) ↔ S")
+        self.assertEqual(str(Iff(p, Implies(q, r))), "P ↔ (Q → S)")
+        self.assertEqual(str(Implies(Iff(p, q), r)), "(P ↔ Q) → S")
+
+    def test_atoms_are_bracketed_when_juxtaposition_would_not_read_back(self):
+        # A multi-letter name would run into its terms, and 'Ax' would be
+        # read as a quantifier.
+        self.assertEqual(str(Atom("Loves", self.a, self.b)), "Loves(a, b)")
+        self.assertEqual(str(Atom("A", self.x)), "A(x)")
+        self.assertEqual(str(Atom("E", self.a)), "E(a)")
+        self.assertEqual(str(Atom("A_1", self.x)), "A_1x")
 
     def test_quantifiers_take_the_smallest_scope(self):
         wide = Forall(self.x, Implies(self.Fx(), self.Gx()))

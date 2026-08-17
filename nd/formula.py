@@ -99,6 +99,15 @@ _PREC_AND = 2
 _PREC_OR = 1
 _PREC_ARROW = 0
 
+# A name that juxtaposition can render unambiguously: one letter, with an
+# optional numeric subscript.
+_SINGLE_NAME = re.compile(r"^[A-Za-z](?:_[0-9]+)?$")
+
+# Predicate letters that ASCII input reads as quantifiers, so 'Ax' would
+# come back as a binder rather than an atom.  Kept in step with
+# ``nd.parser`` by the round-trip tests.
+_QUANTIFIER_LETTERS = frozenset({"A", "E"})
+
 
 # --------------------------------------------------------------------------
 # Arity registry
@@ -250,6 +259,52 @@ def fresh_constant(avoid: Iterable[Term], stem: str = "a") -> Constant:
     """
     taken = frozenset(term.name for term in avoid if isinstance(term, Constant))
     return Constant(_fresh_name(stem, taken))
+
+
+# --------------------------------------------------------------------------
+# Argument checking
+# --------------------------------------------------------------------------
+
+# These run at construction time, so a formula never exists in a state
+# where its own methods would fail.  Passing a bare string is the easy
+# slip -- 'Atom("P", "x")' would otherwise build happily and only break
+# later, inside free_variables(), pointing at this file rather than at the
+# caller.  ``Formula`` is defined below; the names resolve when called.
+
+
+def _check_term(value: object, role: str) -> None:
+    if isinstance(value, Term):
+        return
+    hint = ""
+    if isinstance(value, str):
+        hint = "; write Variable({0!r}) or Constant({0!r})".format(value)
+    raise TypeError(
+        "{0} must be a Term, not {1}{2}".format(role, type(value).__name__, hint)
+    )
+
+
+def _check_variable(value: object, role: str) -> None:
+    if isinstance(value, Variable):
+        return
+    hint = ""
+    if isinstance(value, str):
+        hint = "; write Variable({0!r})".format(value)
+    elif isinstance(value, Constant):
+        hint = "; a constant cannot be bound by a quantifier"
+    raise TypeError(
+        "{0} must be a Variable, not {1}{2}".format(role, type(value).__name__, hint)
+    )
+
+
+def _check_formula(value: object, role: str) -> None:
+    if isinstance(value, Formula):
+        return
+    hint = ""
+    if isinstance(value, str):
+        hint = "; write Formula.parse({0!r})".format(value)
+    raise TypeError(
+        "{0} must be a Formula, not {1}{2}".format(role, type(value).__name__, hint)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -428,6 +483,17 @@ class Formula(ABC):
         """The biconditional of this formula with ``other``."""
         return Iff(self, other)
 
+    @classmethod
+    def parse(cls, text: str) -> "Formula":
+        """Read a formula from a string: ``Formula.parse("Ax(Fx -> Gx)")``.
+
+        See :mod:`nd.parser` for the notation.  The import is deferred
+        because that module imports this one.
+        """
+        from nd.parser import parse
+
+        return parse(text)
+
     # -- printing ----------------------------------------------------------
 
     @abstractmethod
@@ -454,6 +520,16 @@ class Atom(Formula):
     __slots__ = ("predicate", "terms")
 
     def __init__(self, predicate: str, *terms: Term) -> None:
+        if not isinstance(predicate, str):
+            raise TypeError(
+                "a predicate name must be a string, not {0}".format(
+                    type(predicate).__name__
+                )
+            )
+        for index, term in enumerate(terms):
+            _check_term(term, "argument {0} of {1!r}".format(index + 1, predicate))
+        # Checked before recording, so a rejected call leaves the arity
+        # registry untouched.
         _record_arity(predicate, len(terms))
         object.__setattr__(self, "predicate", predicate)
         object.__setattr__(self, "terms", tuple(terms))
@@ -503,7 +579,23 @@ class Atom(Formula):
     def _de_bruijn(self, binders: Tuple[Variable, ...]):
         return ("atom", self.predicate, tuple(_term_index(t, binders) for t in self.terms))
 
+    def _needs_brackets(self) -> bool:
+        """True if juxtaposition would not read back as this atom.
+
+        A multi-letter name would run into its terms, and 'A' or 'E'
+        juxtaposed with a variable is read as a quantifier; see
+        :mod:`nd.parser`.
+        """
+        return (
+            _SINGLE_NAME.match(self.predicate) is None
+            or self.predicate in _QUANTIFIER_LETTERS
+        )
+
     def _render(self, parent_precedence: int) -> str:
+        if self._needs_brackets():
+            return "{0}({1})".format(
+                self.predicate, ", ".join(str(t) for t in self.terms)
+            )
         return self.predicate + "".join(str(t) for t in self.terms)
 
     def __eq__(self, other) -> bool:
@@ -529,6 +621,10 @@ class Equality(Formula):
 
     left: Term
     right: Term
+
+    def __post_init__(self) -> None:
+        _check_term(self.left, "the left side of an identity")
+        _check_term(self.right, "the right side of an identity")
 
     def free_variables(self) -> FrozenSet[Variable]:
         return self.left.free_variables() | self.right.free_variables()
@@ -582,6 +678,9 @@ class Not(Formula):
 
     sub: Formula
 
+    def __post_init__(self) -> None:
+        _check_formula(self.sub, "the formula negated")
+
     def free_variables(self) -> FrozenSet[Variable]:
         return self.sub.free_variables()
 
@@ -632,6 +731,14 @@ class _Binary(Formula):
     symbol = ""
     precedence = _PREC_ARROW
     right_associative = False
+    #: True for the two arrows, which share a precedence level.
+    is_arrow = False
+
+    def __post_init__(self) -> None:
+        # Inherited by each connective, since dataclass emits the call
+        # whenever the attribute is reachable on the class.
+        _check_formula(self.left, "the left side of {0}".format(self.symbol))
+        _check_formula(self.right, "the right side of {0}".format(self.symbol))
 
     def free_variables(self) -> FrozenSet[Variable]:
         return self.left.free_variables() | self.right.free_variables()
@@ -681,6 +788,20 @@ class _Binary(Formula):
             self.right._de_bruijn(binders),
         )
 
+    def _render_child(self, child: Formula, context: int) -> str:
+        text = child._render(context)
+        # '->' and '<->' share a precedence level, so precedence alone
+        # would leave 'P -> Q <-> S' unbracketed and unreadable.  Bracket
+        # whenever one arrow sits directly inside the other.
+        if (
+            self.is_arrow
+            and getattr(child, "is_arrow", False)
+            and child.__class__ is not self.__class__
+            and not text.startswith("(")
+        ):
+            text = "({0})".format(text)
+        return text
+
     def _render(self, parent_precedence: int) -> str:
         # A right-associative connective needs no brackets on its right
         # branch when the two are equally tight, and vice versa.
@@ -689,9 +810,9 @@ class _Binary(Formula):
         else:
             left_context, right_context = self.precedence, self.precedence + 1
         text = "{0} {1} {2}".format(
-            self.left._render(left_context),
+            self._render_child(self.left, left_context),
             self.symbol,
-            self.right._render(right_context),
+            self._render_child(self.right, right_context),
         )
         return _bracket(text, self.precedence, parent_precedence)
 
@@ -739,6 +860,7 @@ class Implies(_Binary):
     symbol = IMPLIES
     precedence = _PREC_ARROW
     right_associative = True
+    is_arrow = True
 
 
 @dataclass(frozen=True, repr=False)
@@ -751,6 +873,7 @@ class Iff(_Binary):
     symbol = IFF
     precedence = _PREC_ARROW
     right_associative = True
+    is_arrow = True
 
 
 class Quantified(Formula):
@@ -760,6 +883,10 @@ class Quantified(Formula):
 
     #: Filled in by each subclass.
     symbol = ""
+
+    def __post_init__(self) -> None:
+        _check_variable(self.variable, "the variable bound by {0}".format(self.symbol))
+        _check_formula(self.body, "the body of {0}".format(self.symbol))
 
     def free_variables(self) -> FrozenSet[Variable]:
         return self.body.free_variables() - {self.variable}
@@ -871,44 +998,3 @@ def _term_index(term: Term, binders: Tuple[Variable, ...]):
                 return ("bound", distance)
         return ("free", term.name)
     return ("const", term.name)
-
-
-# --------------------------------------------------------------------------
-# Demonstration
-# --------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    x, y = Variable("x"), Variable("y")
-    a = Constant("a")
-
-    # Ax (Fx -> Ey Rxy), built with named constructors ...
-    claim = Forall(x, Implies(Atom("F", x), Exists(y, Atom("R", x, y))))
-    # ... and with operators, where '&', '|' and '~' are available.
-    same = Forall(x, Atom("F", x).implies(Exists(y, Atom("R", x, y))))
-
-    print("formula:          ", claim)
-    print("built both ways:  ", claim == same)
-    print("free variables:   ", set(claim.free_variables()) or "none")
-    print("is a sentence:    ", claim.is_sentence())
-
-    # Universal elimination, then universal introduction back again.
-    instance = claim.body.substitute(x, a)
-    print("instance at a:    ", instance)
-    print("constants:        ", set(instance.constants()))
-    print("generalised:      ", instance.generalise(a, x))
-
-    # The proviso is reported rather than silently repaired.
-    trap = Exists(y, Not(Equality(x, y)))
-    print("free for x in {0}: {1}".format(trap, trap.is_free_for(y, x)))
-    try:
-        trap.substitute(x, y)
-    except CaptureError as error:
-        print("refused:          ", error)
-
-    # Bracketing follows the usual conventions.
-    p, q, r = Atom("P"), Atom("Q"), Atom("S")
-    print("smallest scope:   ", Implies(Forall(x, Atom("F", x)), Atom("G", a)))
-    print("arrows right-assoc:", Implies(p, Implies(q, r)))
-    print("and binds tighter:", Implies(And(p, q), r))
-    print("brackets needed:  ", And(p, Implies(q, r)))
-    print("negated:          ", Not(Or(p, And(q, r))))

@@ -1,8 +1,8 @@
 """Natural deduction for L_= , following Halbach's *The Logic Manual*.
 
-At present this package provides the language only: terms, formulae, and
-the operations the deduction rules will be built on.  See
-:mod:`nd.formula`.
+At present this package provides the language only: terms and formulae
+(:mod:`nd.formula`), the operations the deduction rules will be built on,
+and a reader for the book's notation (:mod:`nd.parser`).
 """
 
 from nd.formula import (
@@ -28,6 +28,7 @@ from nd.formula import (
     fresh_variable,
     reset_arities,
 )
+from nd.parser import ParseError, parse, parse_term
 
 __all__ = [
     "FormulaError",
@@ -51,4 +52,7 @@ __all__ = [
     "fresh_constant",
     "reset_arities",
     "declared_arities",
+    "ParseError",
+    "parse",
+    "parse_term",
 ]
