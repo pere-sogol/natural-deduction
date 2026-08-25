@@ -15,10 +15,11 @@ Arguments a rule cannot recover from its subproofs are passed explicitly
 and declared in ``parameters``: which disjunct ``vIntro`` adds, which
 assumption ``->Intro`` discharges, which existential ``EIntro`` claims.
 
-Two rules verify a proposed conclusion instead of computing one.  ``EIntro``
+Some rules verify a proposed conclusion instead of computing one.  ``EIntro``
 and ``=Elim`` replace *some* occurrences, not all -- from ``Raa`` one may
 infer ``Ex Rxa`` as well as ``Ex Rxx`` -- so there is nothing for them to
-compute.  The caller supplies the conclusion and the rule checks it.
+compute.  ``^Elim`` has two conjuncts to choose between and no way to guess.
+In each case the caller supplies the conclusion and the rule checks it.
 """
 
 from __future__ import annotations
@@ -58,8 +59,7 @@ __all__ = [
     "Assumption",
     "EqualityIntro",
     "AndIntro",
-    "AndElim1",
-    "AndElim2",
+    "AndElim",
     "OrIntro1",
     "OrIntro2",
     "OrElim",
@@ -247,33 +247,43 @@ class AndIntro(Proof):
 
 
 @register
-class AndElim1(Proof):
-    """(^Elim1) From phi_1 ^ phi_2 infer phi_1."""
+class AndElim(Proof):
+    """(^Elim) From phi_1 ^ phi_2 infer either conjunct.
+
+    The reference states this as two rules, (^Elim1) taking the left
+    conjunct and (^Elim2) the right.  They differ in nothing a proof
+    records: both are one premise, one node and the same label ``^E`` on
+    the bar, so a finished proof cannot tell you which was used.  Keeping
+    them apart only made the caller choose a side before it had a formula
+    in hand.  So there is one rule, and the conjunct wanted is named.
+
+    Which conjunct that is cannot be computed -- a conjunction has two --
+    so it is supplied and checked, as ``EIntro`` and ``=Elim`` are.  In an
+    editor the conclusion is the line under the bar, so nothing is typed
+    that would not have been typed anyway.
+    """
 
     __slots__ = ()
 
-    name = "∧Elim1"
+    name = "∧Elim"
     label = "∧E"
     subproof_count = 1
+    parameters = (
+        Parameter("conclusion", "formula", "the conjunct taken, phi_1 or phi_2"),
+    )
 
-    def __init__(self, pi1: Proof) -> None:
+    def __init__(self, pi1: Proof, conclusion: Formula) -> None:
         conjunction = _concluding(pi1, And, self.name, "pi_1")
-        self._seal(conjunction.left, (pi1,))
-
-
-@register
-class AndElim2(Proof):
-    """(^Elim2) From phi_1 ^ phi_2 infer phi_2."""
-
-    __slots__ = ()
-
-    name = "∧Elim2"
-    label = "∧E"
-    subproof_count = 1
-
-    def __init__(self, pi1: Proof) -> None:
-        conjunction = _concluding(pi1, And, self.name, "pi_1")
-        self._seal(conjunction.right, (pi1,))
+        _check_formula(conclusion, self.name, "the conclusion")
+        if conclusion not in (conjunction.left, conjunction.right):
+            raise MismatchError(
+                self.name,
+                "{0} is neither conjunct of {1}: this rule gives {2} or {3}"
+                .format(
+                    conclusion, conjunction, conjunction.left, conjunction.right
+                ),
+            )
+        self._seal(conclusion, (pi1,))
 
 
 # --------------------------------------------------------------------------

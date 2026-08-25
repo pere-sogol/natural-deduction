@@ -55,6 +55,7 @@ __all__ = ["Solved", "solve", "predict"]
 #: ``ndweb.refine.fields`` uses, giving the index of the premise that
 #: answers it.
 FROM_PREMISE = {
+    "∧Elim": {"conjunction": 0},
     "→Elim": {"antecedent": 0},
     "∨Elim": {"disjunction": 2},
     "¬Intro": {"witness": 0},

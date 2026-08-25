@@ -23,8 +23,7 @@ CASES = {
     "Assumption": ("P", {}),
     "=Intro": ("a=a", {}),
     "∧Intro": ("P & Q", {}),
-    "∧Elim1": ("P", {"right": "Q"}),
-    "∧Elim2": ("P", {"left": "Q"}),
+    "∧Elim": ("P", {"conjunction": "P & Q"}),
     "∨Intro1": ("P | Q", {}),
     "∨Intro2": ("P | Q", {}),
     "∨Elim": ("S", {"disjunction": "P | Q"}),
@@ -109,7 +108,7 @@ class TestShapeGating(RefineTestCase):
 
     def test_an_elimination_will_try_any_goal(self):
         """They are how you get at what you have, so nothing gates them."""
-        for name in ("∧Elim1", "→Elim", "¬Elim", "∨Elim"):
+        for name in ("∧Elim", "→Elim", "¬Elim", "∨Elim"):
             self.assertIsInstance(fields(name, parse("P & Q"), Context()), tuple)
 
 
@@ -253,7 +252,7 @@ class TestMissingInput(RefineTestCase):
 class TestProbe(RefineTestCase):
     def test_it_reports_every_rule_with_a_reason_when_unavailable(self):
         found = dict((p.rule, p) for p in probe(parse("P & Q"), Context()))
-        self.assertEqual(len(found), 21)
+        self.assertEqual(len(found), 20)
         self.assertTrue(found["∧Intro"].available)
         self.assertFalse(found["∨Intro1"].available)
         self.assertIn("disjunction", found["∨Intro1"].reason)

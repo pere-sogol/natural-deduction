@@ -133,7 +133,7 @@ BACKWARD = {
     "Assumption": "determined", "=Intro": "determined",
     "∧Intro": "determined", "∨Intro1": "determined", "∨Intro2": "determined",
     "→Intro": "determined", "↔Intro": "determined",
-    "∧Elim1": "formula", "∧Elim2": "formula", "→Elim": "formula",
+    "∧Elim": "formula", "→Elim": "formula",
     "∨Elim": "formula", "¬Intro": "formula", "¬Elim": "formula",
     "↔Elim1": "formula", "↔Elim2": "formula", "∀Elim": "formula",
     "∃Elim": "formula", "=Elim1": "formula", "=Elim2": "formula",
@@ -240,13 +240,12 @@ def fields(rule_name: str, target: Formula, context: Optional[Context] = None):
     if kind == "determined":
         return ()
 
-    if rule_name in ("∧Elim1", "∧Elim2"):
-        side = "right" if rule_name == "∧Elim1" else "left"
-        return (Field(side, "formula",
-                      "the other conjunct, which will be discarded",
-                      _shaped_suggestions(context, And,
-                                          lambda f: f.right if rule_name == "∧Elim1"
-                                          else f.left)),)
+    if rule_name == "∧Elim":
+        return (Field("conjunction", "formula",
+                      "the conjunction to take {0} out of".format(target),
+                      _shaped_suggestions(
+                          context, And,
+                          lambda f: f if target in (f.left, f.right) else None)),)
 
     if rule_name == "→Elim":
         return (Field("antecedent", "formula",
@@ -369,11 +368,19 @@ def refine(
             Subgoal(target.left, frozenset({target.right})),
         ))
 
-    if rule_name in ("∧Elim1", "∧Elim2"):
-        side = "right" if rule_name == "∧Elim1" else "left"
-        other = _formula(inputs, side, "the conjunct to be discarded")
-        conjunction = And(target, other) if side == "right" else And(other, target)
-        return Refinement((Subgoal(conjunction),))
+    if rule_name == "∧Elim":
+        conjunction = _formula(inputs, "conjunction", "the conjunction to break up")
+        if not isinstance(conjunction, And):
+            raise RefineError(
+                "{0} is not a conjunction, so there is nothing to take out of it"
+                .format(conjunction)
+            )
+        if target not in (conjunction.left, conjunction.right):
+            raise RefineError(
+                "{0} is neither conjunct of {1}, so this rule cannot reach it"
+                .format(target, conjunction)
+            )
+        return Refinement((Subgoal(conjunction),), (Binding("conclusion", target),))
 
     if rule_name == "→Elim":
         antecedent = _formula(inputs, "antecedent", "the sentence psi")

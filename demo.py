@@ -170,7 +170,8 @@ def deduction() -> None:
     print("\ncan_apply, for offering rules rather than applying them:")
     print("  ∧Intro:", can_apply(
         "∧Intro", [Assumption(parse("P")), Assumption(parse("Q"))]) or "available")
-    print("  ∧Elim1:", can_apply("∧Elim1", [Assumption(parse("P"))]))
+    print("  ∧Elim: ", can_apply(
+        "∧Elim", [Assumption(parse("P"))], conclusion=parse("P")))
 
 
 def main() -> None:

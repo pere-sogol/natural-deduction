@@ -76,7 +76,8 @@ class TestFailureIsLocal(RealiseTestCase):
         """Otherwise every keystroke would blank the whole drawing."""
         good = self.builder.step("∧Intro", [self.builder.assume(self.p),
                                             self.builder.assume(self.q)])
-        bad = self.builder.step("∧Elim1", [self.builder.assume(self.p)])
+        bad = self.builder.step("∧Elim", [self.builder.assume(self.p)],
+                                claim=self.p)
         root = self.builder.step("∧Intro", [good, bad])
         realisation = realise(root)
 
@@ -86,10 +87,11 @@ class TestFailureIsLocal(RealiseTestCase):
         self.assertIsNone(realisation.proof)
 
     def test_a_failure_names_the_node_it_happened_at(self):
-        bad = self.builder.step("∧Elim1", [self.builder.assume(self.p)])
+        bad = self.builder.step("∧Elim", [self.builder.assume(self.p)],
+                                claim=self.p)
         failure = realise(bad).failures[bad.id]
         self.assertEqual(failure.node, bad.id)
-        self.assertEqual(failure.rule, "∧Elim1")
+        self.assertEqual(failure.rule, "∧Elim")
         self.assertIn("conjunction", failure.message)
 
 

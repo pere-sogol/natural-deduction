@@ -43,12 +43,14 @@ class TestDownwards(UnifyTestCase):
 
     def test_it_is_the_engine_answering_not_a_second_table(self):
         """predict stands the premises up as assumptions and applies the rule."""
-        conclusion, failure = predict("∧Elim1", [parse("P & Q")], {})
+        conclusion, failure = predict(
+            "∧Elim", [parse("P & Q")], {"conclusion": parse("P")})
         self.assertEqual(str(conclusion), "P")
         self.assertIsNone(failure)
 
     def test_a_rule_that_does_not_apply_says_so_rather_than_guessing(self):
-        conclusion, failure = predict("∧Elim1", [parse("P")], {})
+        conclusion, failure = predict(
+            "∧Elim", [parse("P")], {"conclusion": parse("P")})
         self.assertIsNone(conclusion)
         self.assertEqual(failure.kind, "shape")
 

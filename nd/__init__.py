@@ -53,8 +53,7 @@ from nd.proofs import (
 )
 from nd.render import Layout, PlacedBar, PlacedFormula, layout, to_text
 from nd.rules import (
-    AndElim1,
-    AndElim2,
+    AndElim,
     AndIntro,
     Assumption,
     EqualityElim1,
@@ -117,8 +116,7 @@ __all__ = [
     "Assumption",
     "EqualityIntro",
     "AndIntro",
-    "AndElim1",
-    "AndElim2",
+    "AndElim",
     "OrIntro1",
     "OrIntro2",
     "OrElim",

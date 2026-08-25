@@ -339,21 +339,35 @@ function wire() {
 
 /* -- boot ------------------------------------------------------------------ */
 
+/* The sources are fetched fresh every time, never from the browser's cache.
+ *
+ * ``web/serve.py`` sends ``Cache-Control: no-store`` for exactly this reason,
+ * but the page must not depend on being served by it: any other static server
+ * -- ``python3 -m http.server``, say -- sends no freshness header at all, and a
+ * browser then caches on a heuristic of its own. Files edited at different
+ * times get different heuristic lifetimes, so a reload can mix a cached module
+ * with a fresh one: half of ``nd`` from this morning and half from last night,
+ * which registers rules the rest of the code no longer knows about. Asking for
+ * ``no-store`` here settles it wherever the page is served from. */
+function load(path) {
+  return fetch(path, { cache: "no-store" });
+}
+
 async function boot() {
   const say = text => { $("bootmsg").textContent = text; };
   say("Downloading Python…");
   const pyodide = await loadPyodide();
 
   say("Loading the proof checker…");
-  const files = await (await fetch("manifest.json")).json();
+  const files = await (await load("manifest.json")).json();
   await Promise.all(files.map(async path => {
-    const source = await (await fetch("../" + path)).text();
+    const source = await (await load("../" + path)).text();
     const directory = "/lib/" + path.slice(0, path.lastIndexOf("/"));
     pyodide.FS.mkdirTree(directory);
     pyodide.FS.writeFile("/lib/" + path, source);
   }));
 
-  const bootstrap = await (await fetch("bootstrap.py")).text();
+  const bootstrap = await (await load("bootstrap.py")).text();
   pyodide.runPython(bootstrap);
   dispatch = pyodide.globals.get("dispatch");
 

@@ -26,8 +26,7 @@ SUMMARIES = {
     "Assumption": "Assume a sentence. It stays open until some rule discharges it.",
     "=Intro": "Any constant is identical to itself: write c = c, resting on nothing.",
     "∧Intro": "From φ and ψ, conclude φ ∧ ψ.",
-    "∧Elim1": "From φ ∧ ψ, conclude φ.",
-    "∧Elim2": "From φ ∧ ψ, conclude ψ.",
+    "∧Elim": "From φ ∧ ψ, conclude either conjunct: φ, or ψ.",
     "∨Intro1": "From φ, conclude φ ∨ ψ for any ψ you choose.",
     "∨Intro2": "From ψ, conclude φ ∨ ψ for any φ you choose.",
     "∨Elim": "Proof by cases: if φ ∨ ψ, and χ follows from each, conclude χ.",
@@ -57,8 +56,7 @@ SCHEMA = {
     "Assumption": ((), "φ", ()),
     "=Intro": ((), "c = c", ()),
     "∧Intro": (("φ", "ψ"), "φ ∧ ψ", ()),
-    "∧Elim1": (("φ ∧ ψ",), "φ", ()),
-    "∧Elim2": (("φ ∧ ψ",), "ψ", ()),
+    "∧Elim": (("φ ∧ ψ",), "φ", ()),
     "∨Intro1": (("φ",), "φ ∨ ψ", ()),
     "∨Intro2": (("ψ",), "φ ∨ ψ", ()),
     "∨Elim": (("χ", "χ", "φ ∨ ψ"), "χ", ("φ", "ψ", None)),
@@ -79,6 +77,7 @@ SCHEMA = {
 
 #: The provisos worth warning about before a student runs into them.
 CAVEATS = {
+    "∧Elim": "Either conjunct will do; say which by writing it under the bar.",
     "∀Intro": "c must be arbitrary: absent from every assumption still open.",
     "∃Elim": "c must be fresh: absent from the existential, from the conclusion, "
              "and from every other assumption still open.",

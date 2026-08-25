@@ -27,7 +27,7 @@ saying which. Proofs draw themselves the way the book does.
 
 ## Status
 
-The language, the parser, all 21 rules and the renderer are written and tested,
+The language, the parser, all 20 rules and the renderer are written and tested,
 and there is a browser sandbox built on top of them — see **The sandbox** below.
 There is still no proof *search*: the sandbox works out everything a block's own
 shape settles, and tells you why a step will not go, but it will not find the
@@ -192,7 +192,7 @@ ExistsIntro(raa, parse("Ex Rxb"))    # MismatchError
 | | Introduction | Elimination |
 |---|---|---|
 | leaves | `Assumption`, `EqualityIntro` | |
-| ∧ | `AndIntro` | `AndElim1`, `AndElim2` |
+| ∧ | `AndIntro` | `AndElim` |
 | ∨ | `OrIntro1`, `OrIntro2` | `OrElim` |
 | → | `ImpliesIntro` | `ImpliesElim` |
 | ¬ | `NotIntro` | `NotElim` |
@@ -206,13 +206,17 @@ Constructor arguments follow the numbering of the subproofs in
 worth flagging: `IffIntro(π₁, π₂)` takes the proof of the *right* half first,
 and `OrElim(π₁, π₂, π₃)` takes the disjunction last.
 
+`AndElim` is one rule rather than the reference's two, and is told which
+conjunct it takes: `AndElim(π, parse("Q"))`. See the note on the reference
+below.
+
 Rules can also be reached by name, which is how a user interface would enumerate
 them without importing every class:
 
 ```python
-rule_catalogue()                                   # all 21 classes
+rule_catalogue()                                   # all 20 classes
 apply("∧Intro", [Assumption(p), Assumption(parse("Q"))])   # build one
-can_apply("∧Elim1", [Assumption(p)])               # the error, without raising
+can_apply("∧Elim", [Assumption(p)], conclusion=p)  # the error, without raising
 rule("∃Intro").parameters                          # what else it needs
 ```
 
@@ -233,7 +237,7 @@ discharge numbering, which the browser reuses even though it sets its own type.
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests -t .          # 391 tests
+python3 -m unittest discover -s tests -t .          # 394 tests
 python3 -m unittest tests.test_rules                # one module
 python3 demo.py                                     # a printable tour
 ```
@@ -245,11 +249,20 @@ of every class, and equality between them would silently fail.
 ## A note on the reference
 
 `reference/NDrules.pdf` sets out the system formally. The checker follows it
-except in one place: its statement of (∃Elim) on p.45 omits the requirement that
-the parameter not occur in the conclusion. Without that, `∃x Fx ⊢ Fa` is
-derivable — take the subproof to be the bare assumption `Fa`, and every stated
-condition holds vacuously. *The Logic Manual* states the proviso with the
-conclusion included, and that is what is enforced here.
+except in two places.
+
+Its statement of (∃Elim) on p.45 omits the requirement that the parameter not
+occur in the conclusion. Without that, `∃x Fx ⊢ Fa` is derivable — take the
+subproof to be the bare assumption `Fa`, and every stated condition holds
+vacuously. *The Logic Manual* states the proviso with the conclusion included,
+and that is what is enforced here.
+
+Its (∧Elim1) and (∧Elim2) on p.41 are one rule here. The two differ in nothing a
+proof records — one premise, one node, the same `∧E` on the bar — so a finished
+proof cannot tell you which was used, and keeping them apart only meant choosing
+a side before there was a formula to choose about. `AndElim` takes the conjunct
+it concludes and checks it is one of the two. This proves exactly what the pair
+proved.
 
 ## The sandbox
 
@@ -320,7 +333,7 @@ is thrown away and the numbers kept.
 nd/formula.py    terms and formulae; substitution, generalisation, α-equivalence
 nd/parser.py     reading the book's notation from strings
 nd/proofs.py     the proof tree, the errors, the rule registry
-nd/rules.py      the 21 rules and their provisos
+nd/rules.py      the 20 rules and their provisos
 nd/render.py     placement and drawing
 
 ndweb/           the sandbox's model: slots, both directions of every rule,

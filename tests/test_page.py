@@ -45,6 +45,22 @@ class TestElements(PageTestCase):
                 os.path.exists(os.path.join(ROOT, "web", path)), path
             )
 
+    def test_nothing_is_fetched_from_the_browser_s_cache(self):
+        """A mixed load is worse than a slow one.
+
+        The sources are separate files fetched separately, so a browser
+        free to cache them can serve some from disk and some from the
+        network -- half of ``nd`` as it was last night and half as it is
+        now, registering rules the rest of the code has never heard of.
+        The symptom is a palette showing a rule that no longer exists.
+        ``web/serve.py`` sends ``no-store``, but the page is also opened
+        behind other static servers, so it must ask as well.
+        """
+        calls = re.findall(r"fetch\((.*?)\)", self.app)
+        self.assertTrue(calls, "the check found no fetch to check")
+        for call in calls:
+            self.assertIn('cache: "no-store"', call, call)
+
 
 class TestClasses(PageTestCase):
     def painted(self):

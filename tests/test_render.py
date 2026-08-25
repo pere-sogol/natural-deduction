@@ -7,7 +7,7 @@ from nd.formula import Constant, Variable, reset_arities
 from nd.parser import parse
 from nd.render import layout, to_text
 from nd.rules import (
-    AndElim1,
+    AndElim,
     AndIntro,
     Assumption,
     EqualityIntro,
@@ -295,7 +295,7 @@ class TestPlacementOrder(RenderTestCase):
             Assumption(p),
             EqualityIntro(self.a),
             AndIntro(Assumption(p), Assumption(q)),
-            AndElim1(AndIntro(Assumption(p), Assumption(q))),
+            AndElim(AndIntro(Assumption(p), Assumption(q)), p),
             ImpliesIntro(conditional, p),
             OrElim(
                 Assumption(q),

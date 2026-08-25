@@ -62,13 +62,14 @@ __all__ = [
 #: Rules where one parameter simply *is* the conclusion.
 #:
 #: ``∃Intro`` is told the existential it claims, ``¬Elim`` the sentence it
-#: concludes, ``=Elim`` the rewritten sentence, ``Assumption`` what is
-#: assumed -- and in every case that value also ends up written on the line
-#: below the bar.  Making the student type it in two places would invite
+#: concludes, ``=Elim`` the rewritten sentence, ``∧Elim`` which conjunct it
+#: takes, ``Assumption`` what is assumed -- and in every case that value
+#: also ends up written on the line below the bar.  Making the student type it in two places would invite
 #: the two to disagree, so the conclusion slot fills the parameter and the
 #: parameter is not offered separately.
 CONCLUSION_PARAM = {
     "Assumption": "formula",
+    "∧Elim": "conclusion",
     "¬Elim": "conclusion",
     "∃Intro": "conclusion",
     "=Elim1": "conclusion",

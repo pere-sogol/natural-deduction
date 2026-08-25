@@ -11,8 +11,7 @@ from nd.formula import Constant, Variable, reset_arities
 from nd.parser import parse
 from nd.proofs import MismatchError, ProvisoError, ShapeError
 from nd.rules import (
-    AndElim1,
-    AndElim2,
+    AndElim,
     AndIntro,
     Assumption,
     EqualityElim1,
@@ -54,15 +53,33 @@ class TestConjunction(RuleTestCase):
         proof = AndIntro(Assumption(parse("P")), Assumption(parse("Q")))
         self.assertEqual(proof.conclusion, parse("P & Q"))
 
-    def test_elim(self):
+    def test_elim_takes_either_conjunct(self):
+        """One rule, not two: the conjunct wanted is named, not chosen up front."""
         conjunction = Assumption(parse("P & Q"))
-        self.assertEqual(AndElim1(conjunction).conclusion, parse("P"))
-        self.assertEqual(AndElim2(conjunction).conclusion, parse("Q"))
+        self.assertEqual(AndElim(conjunction, parse("P")).conclusion, parse("P"))
+        self.assertEqual(AndElim(conjunction, parse("Q")).conclusion, parse("Q"))
+
+    def test_elim_refuses_a_conclusion_that_is_neither_conjunct(self):
+        self.assertRefuses(
+            MismatchError, "neither conjunct",
+            AndElim, Assumption(parse("P & Q")), parse("S"),
+        )
+
+    def test_elim_takes_a_conjunct_whole_rather_than_reaching_inside_it(self):
+        """From (P ^ Q) ^ S only P ^ Q and S are reachable, not P."""
+        conjunction = Assumption(parse("(P & Q) & S"))
+        self.assertEqual(
+            AndElim(conjunction, parse("P & Q")).conclusion, parse("P & Q")
+        )
+        self.assertRefuses(
+            MismatchError, "neither conjunct",
+            AndElim, conjunction, parse("P"),
+        )
 
     def test_elim_needs_a_conjunction(self):
         self.assertRefuses(
             ShapeError, "must conclude with a conjunction",
-            AndElim1, Assumption(parse("P | Q")),
+            AndElim, Assumption(parse("P | Q")), parse("P"),
         )
 
 

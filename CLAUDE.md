@@ -12,7 +12,7 @@ Roadmap, in order:
 
 1. `nd/formula.py` — terms and formulae **(done)**
 2. `nd/parser.py` — `parse("Ax(Fx -> Ey Rxy)")` **(done)**
-3. `nd/proofs.py` + `nd/rules.py` — the proof tree and the 21 rules **(done)**
+3. `nd/proofs.py` + `nd/rules.py` — the proof tree and the 20 rules **(done)**
 4. `nd/render.py` — drawing a proof as a tree **(done)**
 5. `ndweb/` + `web/` — the browser sandbox **(done)**
 
@@ -23,12 +23,13 @@ See "The editor layer" below.
 
 `reference/NDrules.pdf` (pp. 39–46) specifies the system precisely: the tree
 definitions, every rule, and its side conditions. Consult it before changing a
-rule, and note the one place we knowingly diverge from it.
+rule, and note the two places we knowingly diverge from it (the `∃Elim`
+proviso, and `∧Elim` being one rule rather than two).
 
 ## Commands
 
 ```sh
-python3 -m unittest discover -s tests -t .              # whole suite (391)
+python3 -m unittest discover -s tests -t .              # whole suite (394)
 python3 -m unittest tests.test_rules.TestExistential     # one class
 python3 -m unittest tests.test_formula.TestCapture.test_capture_is_refused
 python3 demo.py                                         # printable smoke demo
@@ -177,6 +178,16 @@ because they replace *some* occurrences (see the note above). The caller passes
 the target and the rule checks it. `_replaces_some()` in `nd/rules.py` does the
 structural walk for `=Elim`, and belongs there rather than on `Formula`.
 
+**`∧Elim` is one rule where the reference has two.** p.41 states (∧Elim1) and
+(∧Elim2) separately, but nothing a proof records distinguishes them: one
+premise, one node, and the same `∧E` on the bar either way. Splitting them only
+forced the caller to pick a side before it had a formula in hand. So there is a
+single `AndElim(π₁, conclusion)`, which joins the verify-don't-compute family
+above — a conjunction has two conjuncts and no way to guess between them, so the
+conjunct wanted is named and checked. Do not read a *third* conjunct out of a
+nested conjunction: from `(P ∧ Q) ∧ S` the rule reaches `P ∧ Q` and `S`, never
+`P`, and `tests/test_rules.py` pins that.
+
 **The renderer is two stages.** `layout()` places sentences and bars on an
 integer grid and returns data; `to_text()` paints characters into it. A web
 front end reuses the first and replaces the second, so keep placement out of
@@ -268,9 +279,11 @@ them; nothing persists them.
 
 **`CONCLUSION_PARAM` stops one value being typed twice.** `∃Intro` is told the
 existential it claims, `¬Elim` the sentence it concludes, `=Elim` the rewritten
-sentence, `Assumption` what is assumed — and in every case that value is also
-the line under the bar. `kwargs()` fills the parameter from `claim`, and
-`parameters()` hides it from the block.
+sentence, `∧Elim` which conjunct it takes, `Assumption` what is assumed — and in
+every case that value is also the line under the bar. `kwargs()` fills the
+parameter from `claim`, and `parameters()` hides it from the block. That is what
+lets `∧Elim` be one rule without adding a chip: on the sheet you say which
+conjunct you want by writing it, which you would have written anyway.
 
 **Contexts are computed, never stored.** What may be assumed at a slot depends
 on every discharging step above it, so a field on `Goal` would go stale the
