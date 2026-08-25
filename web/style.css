@@ -1,0 +1,283 @@
+/* Two typefaces and one idea about widths.
+ *
+ * Sentences are set in a serif face, italic for the letters and upright
+ * for the connectives, the way a logic text sets them.  Everything else --
+ * buttons, labels, the chrome -- is the system face and stays out of the
+ * way.
+ *
+ * Nothing in a proof is positioned.  An inference is a column: premises in
+ * a row, a bar, a conclusion; the bar is as wide as the column and the
+ * column is as wide as its widest part.  So a sentence that grows widens
+ * its own bar and pushes its siblings apart, and the whole figure reflows,
+ * which is what a proof drawn on a character grid can never do.
+ */
+:root {
+  --math: "Latin Modern Roman", "CMU Serif", "STIX Two Text", Charter,
+          "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --ink: #1a1a1a;
+  --paper: #fbfaf7;
+  --panel: #ffffff;
+  --edge: #ddd8cd;
+  --muted: #6d675d;
+  --faint: #a49d90;
+  --accent: #2f5d8a;
+  --accent-soft: #e6eef6;
+  --slot: #9a6b1f;
+  --slot-soft: #fdf4e3;
+  --bad: #a52a2a;
+  --bad-soft: #fbeaea;
+  --good: #2c6e49;
+  --good-soft: #e7f2eb;
+  --grid: rgba(0, 0, 0, .045);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ece9e3; --paper: #15171b; --panel: #1d2026; --edge: #333844;
+    --muted: #9aa0ab; --faint: #6d7480; --accent: #86b8e8; --accent-soft: #21303e;
+    --slot: #dcaa4d; --slot-soft: #32281a; --bad: #ec9494; --bad-soft: #3a2222;
+    --good: #85cea6; --good-soft: #1d2f26; --grid: rgba(255, 255, 255, .05);
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 15px/1.5 var(--ui);
+  color: var(--ink); background: var(--paper);
+  display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+}
+
+/* -- chrome ------------------------------------------------------------- */
+header {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 9px 16px; border-bottom: 1px solid var(--edge); background: var(--panel);
+}
+header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+header h1 span { color: var(--muted); font-weight: 400; }
+#sequent {
+  font-family: var(--math); font-size: 17px; padding: 2px 12px;
+  background: var(--accent-soft); border-radius: 5px; white-space: nowrap;
+  cursor: pointer;
+}
+#status { font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+#status.solved { background: var(--good-soft); color: var(--good); }
+#status.open { background: var(--slot-soft); color: var(--slot); }
+.spacer { flex: 1; }
+button, select {
+  font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 6px;
+  border: 1px solid var(--edge); background: var(--panel); color: var(--ink);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+footer {
+  border-top: 1px solid var(--edge); background: var(--panel);
+  padding: 8px 16px; min-height: 44px; display: flex; align-items: center; gap: 12px;
+}
+#notice { color: var(--bad); font-size: 13px; text-align: right; }
+#context { font-size: 13px; color: var(--muted); display: flex;
+  align-items: center; gap: 6px; flex-wrap: wrap; }
+#context b { color: var(--ink); font-weight: 600; }
+
+main { display: grid; grid-template-columns: 250px 1fr; min-height: 0; }
+
+/* -- the palette -------------------------------------------------------- */
+#palette {
+  border-right: 1px solid var(--edge); background: var(--panel);
+  overflow-y: auto; padding: 10px 10px 40px;
+}
+#palette h2 {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--faint); margin: 16px 0 6px; font-weight: 700;
+}
+#palette h2:first-child { margin-top: 0; }
+.rule {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  text-align: left; margin-bottom: 4px; padding: 7px 9px; cursor: grab;
+  background: transparent; border: 1px solid transparent; border-radius: 7px;
+}
+.rule:hover { background: var(--accent-soft); border-color: var(--edge); }
+.rule.armed { border-color: var(--accent); background: var(--accent-soft); }
+.rule.misfit { opacity: .45; }
+.rule .tag {
+  font-family: var(--math); font-size: 15px; font-weight: 600;
+  color: var(--accent); min-width: 2.6em;
+}
+.rule.misfit .tag { color: var(--muted); }
+/* The figure in the palette is the same setting at a smaller size, and is
+   a picture rather than a target: no hovering, no editing. */
+.rule .fig { flex: 1; display: flex; justify-content: flex-end; }
+.rule .fig .slot { font-size: 13px; cursor: inherit; padding: 0 2px; }
+.rule .fig .slot:hover { background: none; }
+.rule .fig .brack { font-size: 13px; }
+.rule .fig .prem { gap: 1em; }
+.rule .fig .bar { margin: .16em 0 .14em; min-width: 1.6em;
+  border-top-width: 1px; border-top-color: var(--muted); }
+.rule.dragging { opacity: .45; }
+
+/* -- the sheet ---------------------------------------------------------- */
+#sheet {
+  overflow: auto; position: relative; outline: none;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+#cards { position: relative; width: 4000px; height: 3000px; }
+#sheet.dropping { box-shadow: inset 0 0 0 2px var(--accent); }
+#hint {
+  position: absolute; left: 28px; top: 18px; max-width: 30em;
+  color: var(--faint); font-size: 13px; margin: 0; pointer-events: none;
+}
+#hint code { font-family: var(--mono); font-size: 12px; }
+
+.card {
+  position: absolute; background: var(--panel);
+  border: 1px solid var(--edge); border-radius: 10px;
+  padding: 12px 46px 12px 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 6px 18px rgba(0,0,0,.04);
+}
+.card.complete { border-color: var(--good); }
+.card.solution { border-color: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+.card .grip {
+  position: absolute; left: 0; top: 0; right: 0; height: 12px;
+  cursor: grab; border-radius: 10px 10px 0 0;
+}
+.card .grip::after {
+  content: ""; position: absolute; left: 50%; top: 4px; width: 26px;
+  height: 3px; margin-left: -13px; border-radius: 2px; background: var(--edge);
+}
+.card:hover .grip::after { background: var(--faint); }
+.card .bin {
+  position: absolute; right: 4px; top: 4px; border: none; background: none;
+  color: var(--faint); font-size: 15px; padding: 2px 6px; line-height: 1;
+  opacity: 0; border-radius: 5px;
+}
+.card:hover .bin { opacity: 1; }
+.card .bin:hover { color: var(--bad); background: var(--bad-soft); }
+.card .tick {
+  position: absolute; right: 8px; bottom: 6px; color: var(--good);
+  font-size: 12px; font-weight: 700;
+}
+
+/* -- an inference ------------------------------------------------------- */
+.inf { display: inline-flex; flex-direction: column; align-items: center; }
+.prem { display: flex; align-items: flex-end; gap: 2.6em; }
+.bar {
+  position: relative; width: 100%; min-width: 2.5em; height: 0;
+  border-top: 1.3px solid var(--ink); margin: .3em 0 .28em;
+}
+.bar .lab {
+  position: absolute; left: 100%; top: -.82em; padding-left: .45em;
+  font: 600 11px/1 var(--ui); color: var(--muted); white-space: nowrap;
+}
+.bar .lab sup { font-size: .85em; font-weight: 400; }
+/* Styled by exception, so that a failure nobody thought to name here comes
+   out looking wrong rather than looking right.  Only these three say the
+   step is not simply broken. */
+.inf > .bar { border-top-color: var(--bad); }
+.inf > .bar .lab { color: var(--bad); }
+.inf[data-status="ok"] > .bar { border-top-color: var(--ink); }
+.inf[data-status="ok"] > .bar .lab { color: var(--muted); }
+.inf[data-status="pending"] > .bar {
+  border-top-style: dashed; border-top-color: var(--faint);
+}
+.inf[data-status="pending"] > .bar .lab { color: var(--faint); }
+.inf[data-status="drift"] > .bar {
+  border-top-color: var(--slot); border-top-style: double; border-top-width: 3px;
+}
+.inf[data-status="drift"] > .bar .lab { color: var(--slot); }
+.bar.lit { border-top-color: var(--accent) !important; border-top-width: 3px; }
+
+/* -- a sentence --------------------------------------------------------- */
+.line { display: flex; align-items: baseline; white-space: nowrap; }
+.slot {
+  font-family: var(--math); font-size: 17px; line-height: 1.35;
+  padding: 1px 4px; border-radius: 4px; cursor: text;
+  border: 1px solid transparent; display: inline-flex; align-items: baseline;
+}
+.slot:hover { background: var(--accent-soft); }
+.slot.blank {
+  min-width: 3.2em; min-height: 1.6em; border: 1px dashed var(--slot);
+  background: var(--slot-soft); justify-content: center;
+}
+.slot.blank::before { content: "?"; color: var(--slot); }
+.slot.editing { border-style: solid; background: none; padding: 0; }
+.slot.editing::before { content: none; }
+.slot.derived { color: var(--muted); }
+.slot.focused { border-color: var(--accent); background: var(--accent-soft); }
+.slot.dropping { border: 1px solid var(--accent); background: var(--accent-soft); }
+.slot.open { color: var(--slot); }
+.slot.lit { background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.mark { font-size: .62em; vertical-align: super; color: var(--muted); margin-left: .1em; }
+.brack { font-family: var(--math); font-size: 17px; color: var(--muted); }
+.note { font: 11px/1 var(--ui); color: var(--faint); margin-left: .5em;
+  align-self: center; }
+
+/* the pieces of a sentence */
+.pred, .var, .const, .meta { font-style: italic; }
+.meta { color: inherit; }
+.op { font-style: normal; padding: 0 .28em; }
+.neg { font-style: normal; padding-right: .04em; }
+.quant { font-style: normal; }
+.paren { font-style: normal; padding: 0 .02em; }
+.punct { padding-right: .22em; }
+.sub { font-size: .68em; vertical-align: sub; font-style: italic; }
+.gap { width: .3em; display: inline-block; }
+/* A space the setting supplies itself, and the underscore of a subscript:
+   both are kept in the pieces so that what is set reads back exactly, and
+   both are given no width here. */
+.tight { display: none; }
+.under { display: none; }
+
+/* -- an inline editor --------------------------------------------------- */
+.slot input, .param input {
+  font-family: var(--mono); font-size: 14px; padding: 1px 4px;
+  border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--paper); color: var(--ink); outline: none; min-width: 5em;
+}
+
+/* -- the parameters a rule needs ---------------------------------------- */
+.params { display: flex; gap: 6px; flex-wrap: wrap; margin-top: .45em;
+  justify-content: center; }
+.param {
+  font: 11px/1.4 var(--ui); color: var(--muted); background: var(--paper);
+  border: 1px solid var(--edge); border-radius: 12px; padding: 1px 9px;
+  cursor: text; display: inline-flex; gap: .35em; align-items: baseline;
+}
+.param:hover { border-color: var(--accent); }
+.param .k { color: var(--faint); }
+.param .v { font-family: var(--math); font-size: 14px; color: var(--ink); }
+.param.blank { border-style: dashed; border-color: var(--slot); color: var(--slot); }
+.param.blank .v::before { content: "?"; }
+.param.derived .v { color: var(--muted); }
+
+/* -- messages ----------------------------------------------------------- */
+.why {
+  font: 11px/1.4 var(--ui); color: var(--bad); background: var(--bad-soft);
+  border-radius: 5px; padding: 2px 8px; margin-top: .5em; max-width: 30em;
+  text-align: center;
+}
+.why.mild { color: var(--slot); background: var(--slot-soft); }
+.chip {
+  font-family: var(--math); font-size: 15px; background: var(--accent-soft);
+  color: var(--accent); border: 1px solid transparent; border-radius: 4px;
+  padding: 1px 8px; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+
+/* -- boot --------------------------------------------------------------- */
+#boot {
+  position: fixed; inset: 0; display: grid; place-content: center;
+  gap: 12px; text-align: center; background: var(--paper); z-index: 50;
+}
+#boot.done { display: none; }
+#boot h1 { font-size: 17px; margin: 0; font-weight: 600; }
+#boot p { margin: 0; color: var(--muted); font-size: 13px; max-width: 24em; }
+#boot .bar-track { width: 240px; height: 4px; background: var(--edge);
+  border-radius: 2px; overflow: hidden; margin: 0 auto; }
+#boot .bar-fill { height: 100%; width: 30%; background: var(--accent);
+  animation: slide 1.4s ease-in-out infinite; }
+@keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }

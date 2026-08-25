@@ -7,6 +7,7 @@ from nd.formula import Constant, Variable, reset_arities
 from nd.parser import parse
 from nd.render import layout, to_text
 from nd.rules import (
+    AndElim1,
     AndIntro,
     Assumption,
     EqualityIntro,
@@ -17,6 +18,7 @@ from nd.rules import (
     ImpliesIntro,
     NotElim,
     NotIntro,
+    OrElim,
     OrIntro1,
     OrIntro2,
 )
@@ -247,3 +249,114 @@ class TestLayout(RenderTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _post_order(proof):
+    """Every node, children left to right before the node itself."""
+    for subproof in proof.subproofs:
+        for node in _post_order(subproof):
+            yield node
+    yield proof
+
+
+class _Placeable:
+    """A node wearing the placement protocol without being a Proof.
+
+    ``layout`` reads six members and nothing else, which is what lets a
+    front end draw a *partial* derivation -- one still containing holes --
+    through the same painter.  A hole is a leaf whose label is ``?`` and
+    which rests on nothing.
+    """
+
+    def __init__(self, conclusion, subproofs=(), discharged=None, label="",
+                 assumptions=()):
+        self.conclusion = conclusion
+        self.subproofs = tuple(subproofs)
+        self.discharged = (
+            tuple(discharged)
+            if discharged is not None
+            else tuple(frozenset() for _ in self.subproofs)
+        )
+        self.label = label
+        self.assumptions = frozenset(assumptions)
+
+    @property
+    def is_leaf(self):
+        return not self.subproofs
+
+
+class TestPlacementOrder(RenderTestCase):
+    """What a graphical front end needs beyond the geometry itself."""
+
+    def _corpus(self):
+        p, q = parse("P"), parse("Q")
+        conditional = ImpliesElim(Assumption(p), Assumption(parse("P -> Q")))
+        return [
+            Assumption(p),
+            EqualityIntro(self.a),
+            AndIntro(Assumption(p), Assumption(q)),
+            AndElim1(AndIntro(Assumption(p), Assumption(q))),
+            ImpliesIntro(conditional, p),
+            OrElim(
+                Assumption(q),
+                Assumption(q),
+                Assumption(parse("P | S")),
+            ),
+            ForallIntro(EqualityIntro(self.a), self.a, self.x),
+        ]
+
+    def test_placement_runs_post_order(self):
+        """formulae[i] is the i-th node post-order; bars the i-th inference.
+
+        Nothing in the layout points back at the proof, so a front end that
+        wants a click on a sentence to select the subproof it belongs to
+        recovers the node by walking its own tree in the same order.  That
+        correspondence was previously true by accident; this fixes it.
+        """
+        for proof in self._corpus():
+            placed = layout(proof)
+            nodes = list(_post_order(proof))
+            self.assertEqual(
+                [f.formula for f in placed.formulae],
+                [node.conclusion for node in nodes],
+            )
+            inferences = [node for node in nodes if not node.is_leaf]
+            self.assertEqual(len(placed.bars), len(inferences))
+            for bar, node in zip(placed.bars, inferences):
+                self.assertTrue(bar.label.startswith(node.label))
+
+    def test_layout_reads_only_the_placement_protocol(self):
+        """A node that is not a Proof at all still draws.
+
+        Six members are consulted -- conclusion, subproofs, discharged,
+        label, assumptions and is_leaf -- so a proof under construction can
+        be drawn by the same code, with its unfilled goals standing in as
+        leaves.  A front end depends on this; hence the test.
+        """
+        hole = _Placeable(parse("P & Q"), label="?")
+        step = _Placeable(
+            parse("Q -> (P & Q)"), (hole,), (frozenset({parse("Q")}),), "→I"
+        )
+        self.assertEqual(
+            to_text(step),
+            textwrap.dedent(
+                """
+                  P ∧ Q  ?
+                ───────── →I
+                Q → P ∧ Q
+                """
+            ).strip("\n"),
+        )
+
+    def test_a_hole_is_never_bracketed_as_discharged(self):
+        """A goal resting on nothing is not marked closed by a step above it.
+
+        ``[phi]`` means an assumption the proof no longer rests on.  An
+        unfilled goal rests on nothing yet, so bracketing it would claim
+        something false -- and would then vanish once the goal was filled.
+        """
+        hole = _Placeable(parse("P"), label="?")
+        step = _Placeable(parse("P -> P"), (hole,), (frozenset({parse("P")}),), "→I")
+        drawn = to_text(step)
+        self.assertIn("P  ?", drawn)
+        self.assertNotIn("[P]", drawn)
