@@ -27,10 +27,11 @@ saying which. Proofs draw themselves the way the book does.
 
 ## Status
 
-The language, the parser, all 21 rules and the renderer are written and tested.
-There is no proof *search* and no web interface; the longer-term aim is a site
-where proofs are built by dragging rules onto premises, and the API is shaped
-with that in mind, but none of it exists yet.
+The language, the parser, all 21 rules and the renderer are written and tested,
+and there is a browser sandbox built on top of them — see **The sandbox** below.
+There is still no proof *search*: the sandbox works out everything a block's own
+shape settles, and tells you why a step will not go, but it will not find the
+proof for you.
 
 ## Requirements
 
@@ -226,13 +227,13 @@ and a discharge that closes nothing gets no number.
 
 `to_text(proof, ascii_only=True)` draws the bars with hyphens for terminals that
 mangle box-drawing characters. Underneath, `layout(proof)` returns the placement
-as data — every sentence and bar with its position and width — so the drawing can
-be redone with something other than characters.
+as data — every sentence and bar with its position and width — along with the
+discharge numbering, which the browser reuses even though it sets its own type.
 
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests -t .          # 206 tests
+python3 -m unittest discover -s tests -t .          # 391 tests
 python3 -m unittest tests.test_rules                # one module
 python3 demo.py                                     # a printable tour
 ```
@@ -250,6 +251,69 @@ derivable — take the subproof to be the bare assumption `Fa`, and every stated
 condition holds vacuously. *The Logic Manual* states the proviso with the
 conclusion included, and that is what is enforced here.
 
+## The sandbox
+
+A proof sandbox that runs entirely in the browser — no server, no build step,
+nothing to install.
+
+```sh
+python3 -m web.serve        # serves the repo and opens the sandbox
+```
+
+Pyodide loads this package into WebAssembly, so the checker doing the marking is
+the one these tests cover, not a reimplementation that could drift from it.
+First visit fetches about 5 MB of Python and takes a few seconds; after that the
+browser has it cached.
+
+**Drag any rule onto the sheet.** It lands with every slot empty — the premises
+above the bar, the conclusion below, and whatever else the rule needs as a small
+labelled chip. Nothing is asked for in advance and nothing has to be decided
+first.
+
+**Then write in whichever slot you know.** The rest of the block works itself
+out, in both directions and from either end:
+
+| You write | The block works out |
+|---|---|
+| `P` and `Q` above a `∧I` | `P ∧ Q` below it |
+| `P ∧ Q` below a `∧I` | `P` and `Q` above it |
+| `P → Q` in the right premise of `→E` | `P` on the left, `Q` below |
+| `P` on the left of `→E`, `Q` below | `P → Q` on the right |
+| `P → Q` under a `→I` | the subgoal `Q`, and `P` marked as discharged |
+
+Whatever a block cannot settle stays an empty slot, because nothing is invented:
+`↔E` concluding `ψ` says nothing about which `φ` it came through, so it waits.
+Sentences you wrote are set in black, sentences the sheet worked out in grey.
+
+**Blocks join up.** Drag one onto an empty slot in another and it plugs in; drag
+a bar to pull that branch back off, leaving a slot that remembers what it said.
+A block that proves the wrong thing still goes in — its bar then tells you what
+it actually proves, which is more use than refusing it.
+
+Working downwards is the engine itself, not a second opinion about it: a premise
+slot holding `φ` with nothing above it *is* an assumption of `φ`, so the sheet
+applies the real rule to the proof as it stands. Working upwards is a heuristic,
+and is allowed to be unhelpful — every proof the sandbox holds was built by
+`apply()`, so a bad suggestion can waste your time but cannot get a bad proof
+past the checker.
+
+Rules that cannot conclude the selected slot are dimmed with the reason on
+hover, and can still be dropped. Hovering an inference lights up every leaf it
+discharges, since one step closes them all. Undo, redo, and a link that carries
+the whole sheet in its fragment all come free from the document being immutable.
+
+### Typesetting
+
+Proofs are set, not drawn. Each inference is a column — premises in a row, a
+bar, a conclusion centred under it — so every box takes the width of what is in
+it and the figure reflows as sentences grow. The sentences themselves are cut
+into classified pieces in Python, letters italic and connectives upright with
+proper space around them, the way a logic text sets them.
+
+Underneath, `layout()` is still run for one thing: the book's discharge
+numbering, which is subtle enough to be worth having exactly once. The placement
+is thrown away and the numbers kept.
+
 ## Layout
 
 ```
@@ -258,6 +322,10 @@ nd/parser.py     reading the book's notation from strings
 nd/proofs.py     the proof tree, the errors, the rule registry
 nd/rules.py      the 21 rules and their provisos
 nd/render.py     placement and drawing
+
+ndweb/           the sandbox's model: slots, both directions of every rule,
+                 and a proof as a nesting rather than a grid
+web/             the page itself; bootstrap.py is what Pyodide runs
 ```
 
 `CLAUDE.md` records the design decisions and the reasons behind them.

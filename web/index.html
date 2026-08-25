@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Natural deduction</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="boot">
+  <h1>Natural deduction</h1>
+  <div class="bar-track"><div class="bar-fill"></div></div>
+  <p id="bootmsg">Starting the proof checker — a few seconds the first time,
+     then instant.</p>
+</div>
+
+<header>
+  <h1>Natural deduction <span>· L<sub>=</sub></span></h1>
+  <div id="sequent" title="Click to set what you are proving">—</div>
+  <div id="status"></div>
+  <div class="spacer"></div>
+  <select id="exercises" title="Choose something to prove"></select>
+  <button id="undo" title="Undo (⌘Z)">Undo</button>
+  <button id="redo" title="Redo (⇧⌘Z)">Redo</button>
+  <button id="clear" title="Take everything off the sheet">Clear</button>
+  <button id="share" title="Copy a link to this sheet">Share</button>
+</header>
+
+<main>
+  <nav id="palette" aria-label="Rules"></nav>
+  <div id="sheet" tabindex="0" aria-label="Proof sheet">
+    <div id="cards"></div>
+    <p id="hint">
+      Drag a rule onto the sheet. Click any dashed slot and type a sentence —
+      <code>P &amp; Q</code>, <code>Ax(Fx -&gt; Gx)</code>. The rest of the block
+      fills itself in wherever it can.
+    </p>
+  </div>
+</main>
+
+<footer>
+  <div id="context"></div>
+  <div class="spacer"></div>
+  <div id="notice" role="status" aria-live="polite"></div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js"></script>
+<script src="render.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
