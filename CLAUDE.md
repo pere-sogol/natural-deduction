@@ -14,10 +14,12 @@ Roadmap, in order:
 2. `nd/parser.py` — `parse("Ax(Fx -> Ey Rxy)")` **(done)**
 3. `nd/proofs.py` + `nd/rules.py` — the proof tree and the 21 rules **(done)**
 4. `nd/render.py` — drawing a proof as a tree **(done)**
+5. `ndweb/` + `web/` — the browser sandbox **(done)**
 
-The long-term goal is a website where proofs are built by dragging rules onto
-premises, as a teaching tool. Nothing web-facing exists yet, but the deduction
-layer is shaped for it — see "The deduction layer" below.
+The editor runs entirely in the browser: Pyodide loads this very package into
+WebAssembly, so the checker a student uses is the checker these tests cover.
+Proofs are typeset by the browser rather than placed on a character grid.
+See "The editor layer" below.
 
 `reference/NDrules.pdf` (pp. 39–46) specifies the system precisely: the tree
 definitions, every rule, and its side conditions. Consult it before changing a
@@ -26,7 +28,7 @@ rule, and note the one place we knowingly diverge from it.
 ## Commands
 
 ```sh
-python3 -m unittest discover -s tests -t .              # whole suite (206)
+python3 -m unittest discover -s tests -t .              # whole suite (391)
 python3 -m unittest tests.test_rules.TestExistential     # one class
 python3 -m unittest tests.test_formula.TestCapture.test_capture_is_refused
 python3 demo.py                                         # printable smoke demo
@@ -195,6 +197,150 @@ inconsistent MRO and fails at import.
 letter's arity on first use and raises `ArityError` on a later mismatch, so
 writing `Rx` where `Rxy` was meant is caught. Every test case must call
 `reset_arities()` in `setUp` or arities leak between cases.
+
+## The editor layer
+
+`ndweb/` is the editor's own model and `web/` the page that draws it. `ndweb`
+imports `nd`; nothing goes the other way, and `nd` is unchanged by any of it.
+
+The editor is a **sandbox**, and that word is doing work. A rule can be put
+down anywhere, with nothing decided about it, and filled in afterwards in
+whatever order suits. There is no dialogue asking what a rule will need before
+it may be used, no privileged tree, and nothing is refused for being premature.
+What used to be asked in advance — which sentence, which parameter, which of two
+premises — is a **slot on the block**, and `ndweb/unify.py` fills in whichever
+of them the others settle.
+
+**A `Derivation` is not a `Proof`, and must not become one.** A proof is
+complete and valid by construction; a proof being *built* has holes, and a hole
+proves nothing. So `ndweb.derivation` owns a tree of `Goal` (a slot) and `Step`
+(a rule applied to children that may be slots), and `realise()` projects a
+hole-free derivation onto a real `Proof` by calling `apply()`. Keeping the two
+apart is what lets `nd` go on promising that holding a `Proof` means holding a
+proof.
+
+**Every `Proof` in the application is made by `apply()`.** `ndweb` never
+constructs one directly, which is what allows `ndweb/refine.py` and
+`ndweb/unify.py` to guess. A wrong entry there can send a student down a branch
+that leads nowhere; it cannot make the editor accept a bad proof.
+`tests/test_purity.py` enforces this by asserting that no name from
+`nd.rules.__all__` is reachable from any `ndweb` module — a comment would not
+have survived.
+
+**`Goal.target` is optional.** A workspace where every hole had to announce what
+it would eventually contain could only be driven backwards from a goal. Blank
+slots are what make the board a board.
+
+**The document is a flat forest of `Card`s, each with an `(x, y)`.** There is no
+`main` tree and no bench. A block becomes the answer by *proving* the sequent,
+which `view` checks over every card, rather than by sitting in a special place.
+Position is the student's arrangement and nothing in the logic reads it — but it
+is kept in the document all the same, because a board whose pieces jump about
+whenever anything is checked is not a board anybody can think on.
+
+**Forward inference is the engine, not a second table.** `unify.predict` stands
+each premise sentence up as an `Assumption` and applies the real rule. A premise
+slot holding `φ` with nothing above it *is* an assumption of `φ`, so this is not
+a simulation — it is the rule, on the proof as it currently stands. There is
+therefore no `predict()` table to drift from `nd/rules.py`.
+
+**Two rules are exempted from that, and only while unfinished.** `∀Intro` and
+`∃Elim` carry provisos about a parameter being arbitrary or fresh, and those are
+conditions on the whole subtree. While the branches above are holes the proviso
+is *unsettled*, not broken, so `unify._UNSETTLED` predicts the conclusion the
+rule would reach. Nothing is proved by it: `realise` applies the same rule to
+the real subproofs and lets the proviso bite. Do not widen that dict.
+
+**`unify.FROM_PREMISE` is where a backward question is answered by a slot.**
+`refine` asks `→Elim` for an antecedent; on the sheet that antecedent is the
+left premise, so if it has been written there is nothing to ask. Three lines of
+table replaced the whole modal-dialogue flow.
+
+**`unify.MAJOR` is the other half of that.** An elimination given only its major
+premise already knows what it concludes and what its other premises must be, and
+saying so is most of what makes the sheet feel as though it is helping.
+
+**Solved parameters are computed, never stored** — as contexts are, and for the
+same reason. A `→Intro` whose conclusion was written knows perfectly well what
+it discharges; writing that into the document would only let the two disagree.
+`realise(node, solved)` takes them; `discharges(step, resolve, values)` takes
+them; nothing persists them.
+
+**`CONCLUSION_PARAM` stops one value being typed twice.** `∃Intro` is told the
+existential it claims, `¬Elim` the sentence it concludes, `=Elim` the rewritten
+sentence, `Assumption` what is assumed — and in every case that value is also
+the line under the bar. `kwargs()` fills the parameter from `claim`, and
+`parameters()` hides it from the block.
+
+**Contexts are computed, never stored.** What may be assumed at a slot depends
+on every discharging step above it, so a field on `Goal` would go stale the
+moment any of them changed. `unify.solve` walks down from the premises instead.
+It is advisory: a slot may be closed by something resting on other assumptions,
+and the proof still stands with that assumption left open. Telling a student
+"you proved it, but not from what you were given" beats refusing the step.
+
+**`discharge.py` duplicates what `Proof.discharged` records,** because the
+editor needs it before the step exists. `tests/test_discharge.py` checks the two
+agree for every realisable step in the corpus, which is what keeps the copy
+honest — the same trick `parse(str(f)) == f` plays for the printer and the
+parser.
+
+**∀Intro backwards needs a parameter fresh in the *goal*, not merely arbitrary.**
+`generalise()` abstracts every occurrence, so refining `∀x Rxa` at `c = a` gives
+the subgoal `Raa`, which generalises to `∀x Rxx` — a branch that can never reach
+the target. `refine` refuses that outright, which is stricter than the engine and
+the safe direction. Arbitrariness proper can only be *warned* about, since the
+offending assumption may yet be discharged.
+
+**Joining two blocks is not checked.** Dropping a block into a slot it does not
+fit is allowed, and the bar then says what it actually proves. Refusing would
+leave the student holding a block with nowhere to put it and no explanation;
+`Step.claim` turns it into a located *drift* error instead.
+
+### Setting, not drawing
+
+**`nd/render.py` is no longer what the page uses, and still earns its keep.**
+`layout()` places sentences on an integer grid, which is right for a terminal
+and wrong for a page: it assumes one glyph is one cell, so the figure hangs on
+the reader having a monospace font containing `∀ ∃ → ↔`, and it fixes every
+width in Python, so a proof cannot reflow. `ndweb/typeset.py` emits the
+**nesting** instead — premises in a row, a bar, a conclusion — and the browser
+measures the type, the way `bussproofs` lets TeX do it.
+
+What `layout()` is still called for is the **discharge numbering**, which is
+genuinely subtle: numbers rise as the eye travels down, a step closing nothing
+gets none, and one number can mark several leaves. `typeset` runs the layout,
+throws the placement away and keeps the annotation, zipping it post-order.
+`tests/test_render.py` pins that correspondence. Do not reimplement the
+numbering.
+
+**`shadow.py` is still what makes that possible.** `layout()` reads six members
+off a node and never asks whether it has a `Proof`, so a derivation with holes
+draws through the book's own renderer. A slot is given an empty assumption set
+so that no step below brackets it as discharged — it rests on nothing yet, and
+the bracket would then vanish once it was filled.
+
+**`typeset.pieces()` is a lossless lexer over the *printed* sentence.** It
+classifies each character — predicate, variable, constant, connective, subscript
+— so CSS can set the letters italic and put proper space around the connectives.
+Reading the printed string rather than the formula sounds backwards and is not:
+it guarantees that what is set is exactly what `Formula.__str__` produced, which
+is the string the parser reads back. Nothing is dropped: a space a connective
+supplies itself is *marked* `tight` rather than removed, and a subscript's
+underscore is a piece of its own, so `"".join(p["t"] for p in pieces(s)) == s`.
+`tests/test_typeset.py` pins that, and pins `parse(joined) == f` on top of it.
+
+**The Python/JS boundary is one function, JSON string in and JSON string out.**
+Passing objects would be faster and would cost the thing that matters: the tests
+drive the literal call the browser drives, and `json.dumps` fails loudly if a
+`Formula` ever escapes into the view. There is no browser automation on this
+machine, so anything that can only be tested in a browser is effectively
+untested — hence the rule at the top of `web/render.js`: **if a JS function would
+want a unit test, it belongs in Python.**
+
+**No `__main__` inside `ndweb/` either,** for the reason given above for `nd/`.
+`web/bootstrap.py` and `web/serve.py` are the entry points, outside both
+packages as `demo.py` is.
 
 ## Conventions
 
