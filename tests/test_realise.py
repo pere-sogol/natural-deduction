@@ -46,16 +46,17 @@ class RealiseTestCase(unittest.TestCase):
 
 
 class TestPartialProofs(RealiseTestCase):
-    def test_a_hole_is_reported_and_blocks_only_the_steps_below_it(self):
+    def test_a_blank_hole_is_reported_and_blocks_only_the_steps_below_it(self):
         """The rest of the tree is still drawn, and still checked."""
         reset_arities()
         root = solution("russell")
         whole = realise(root)
-        holed = substitute_node(root, 4, Goal(4, parse("Raa")))
+        holed = substitute_node(root, 4, Goal(4))
         partial = realise(holed)
 
         self.assertFalse(partial.complete)
         self.assertEqual(partial.open_goals, (4,))
+        self.assertEqual(partial.blank_goals, (4,))
         self.assertGreater(len(partial.proofs), 0)
         self.assertLess(len(partial.proofs), len(whole.proofs))
         self.assertTrue(
@@ -65,10 +66,56 @@ class TestPartialProofs(RealiseTestCase):
 
     def test_a_branch_beside_a_hole_is_still_verified(self):
         left = self.builder.assume(self.p)
-        step = Step(50, "∧Intro", (left, Goal(51, self.q)))
+        step = Step(50, "∧Intro", (left, Goal(51)))
         realisation = realise(step)
         self.assertIn(left.id, realisation.proofs)
         self.assertEqual(realisation.proofs[left.id].conclusion, self.p)
+
+
+class TestASlotWrittenInto(RealiseTestCase):
+    """A sentence at the top of a step, above nothing, is assumed.
+
+    That is what a leaf of a proof tree *is*, so the editor's slots and its
+    ``Assumption`` blocks are the same thing wearing different clothes, and
+    a block whose holes have all been written into is a real proof -- of
+    its conclusion, from those sentences.  Whether it is a proof of what
+    was asked for is then a question about its assumptions.
+    """
+
+    def test_it_stands_as_an_assumption_of_what_is_written_there(self):
+        step = Step(52, "∧Intro", (Goal(53, self.p), Goal(54, self.q)))
+        realisation = realise(step)
+        self.assertTrue(realisation.complete)
+        self.assertEqual(realisation.proof.conclusion, parse("P & Q"))
+        self.assertEqual(realisation.proof.assumptions, frozenset({self.p, self.q}))
+
+    def test_it_is_still_a_slot_though_it_no_longer_blocks(self):
+        """It is a place a derivation could go; it is just not empty."""
+        step = Step(55, "∧Intro", (Goal(56, self.p), Goal(57)))
+        realisation = realise(step)
+        self.assertEqual(realisation.open_goals, (56, 57))
+        self.assertEqual(realisation.blank_goals, (57,))
+        self.assertFalse(realisation.complete)
+
+    def test_a_step_below_discharges_it_like_any_other_assumption(self):
+        step = Step(58, "→Intro", (Goal(59, self.q),),
+                    (Binding("assumption", self.p),))
+        realisation = realise(step)
+        self.assertEqual(realisation.proof.conclusion, parse("P -> Q"))
+        self.assertEqual(realisation.proof.assumptions, frozenset({self.q}))
+
+    def test_a_proviso_bites_on_it_exactly_as_on_a_written_assumption(self):
+        """AIntro's parameter must be arbitrary, and a slot is not exempt."""
+        step = Step(60, "∀Intro", (Goal(61, parse("Fa")),),
+                    (Binding("constant", Constant("a")),
+                     Binding("variable", Variable("x"))))
+        self.assertEqual(realise(step).failures[60].kind, "proviso")
+
+    def test_a_slot_holding_a_formula_with_a_free_variable_says_so(self):
+        """Every line of a proof is a sentence, slots included."""
+        step = Step(62, "∨Intro", (Goal(63, parse("Fx")),), (),
+                    claim=parse("P | P"))
+        self.assertEqual(realise(step).failures[63].kind, "sentence")
 
 
 class TestFailureIsLocal(RealiseTestCase):

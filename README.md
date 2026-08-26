@@ -322,6 +322,27 @@ hover, and can still be dropped. Hovering an inference lights up every leaf it
 discharges, since one step closes them all. Undo, redo, and a link that carries
 the whole sheet in its fragment all come free from the document being immutable.
 
+**Everything you write at the top is an assumption, and the panel keeps count.**
+A sentence with nothing above it is a leaf, and a leaf is assumed — whether you
+dropped an `Assumption` block or simply typed into the slot. So there is no
+ceremony: write `P → Q` and `P` above a `→E` and you have proved `Q`, from those
+two. The panel on the right sorts what the sheet is resting on into three:
+
+| | |
+|---|---|
+| **Given** | premises — assuming them is free, and one you have not touched yet says so |
+| **Still assuming** | not a premise: prove it, or discharge it. This is the work that is left |
+| **Discharged** | closed by a step below; it costs nothing now |
+
+Which makes finishing a question with an answer rather than a verdict. A sheet
+is done when a block concludes the goal and everything it still rests on was
+given — so instead of "not yet" you get *`Q` is on the sheet, but it rests on
+`R`*, and clicking `R` takes you to the leaf it is assumed at. A slot you have
+written into is bracketed and numbered the moment a step below discharges it,
+which is the bookkeeping students most often lose track of, happening as you
+type. Only a slot left **blank** is a gap: those are counted separately, because
+nothing at all is known there yet.
+
 ### Typesetting
 
 Proofs are set, not drawn. Each inference is a column — premises in a row, a
@@ -344,7 +365,8 @@ nd/rules.py      the 17 rules and their provisos
 nd/render.py     placement and drawing
 
 ndweb/           the sandbox's model: slots, both directions of every rule,
-                 and a proof as a nesting rather than a grid
+                 what the sheet rests on, and a proof as a nesting rather
+                 than a grid
 web/             the page itself; bootstrap.py is what Pyodide runs
 ```
 

@@ -6,6 +6,7 @@
   "nd/render.py",
   "nd/rules.py",
   "ndweb/__init__.py",
+  "ndweb/assumptions.py",
   "ndweb/attempt.py",
   "ndweb/catalogue.py",
   "ndweb/codec.py",

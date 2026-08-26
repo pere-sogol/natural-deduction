@@ -81,7 +81,57 @@ footer {
   align-items: center; gap: 6px; flex-wrap: wrap; }
 #context b { color: var(--ink); font-weight: 600; }
 
-main { display: grid; grid-template-columns: 250px 1fr; min-height: 0; }
+main { display: grid; grid-template-columns: 250px 1fr 240px; min-height: 0; }
+
+/* -- the assumption tracker --------------------------------------------- */
+/* What the sheet rests on, which is the one thing a student cannot read
+   off the figure: an assumption made three branches away is still open
+   here, and whether it was a premise is the difference between a proof
+   and a wish.  Given, still assuming, discharged -- in that order, because
+   that is the order they stop being a problem in. */
+#rests {
+  border-left: 1px solid var(--edge); background: var(--panel);
+  overflow-y: auto; padding: 10px 10px 40px;
+}
+#rests h2 {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--faint); margin: 0 0 8px; font-weight: 700;
+}
+#rests h3 {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--faint); margin: 15px 0 5px; font-weight: 700;
+}
+.verdict {
+  font-size: 12.5px; line-height: 1.4; padding: 7px 9px; border-radius: 7px;
+  border: 1px solid var(--edge);
+}
+.verdict.good { background: var(--good-soft); color: var(--good);
+  border-color: var(--good); }
+.verdict.warn { background: var(--slot-soft); color: var(--slot);
+  border-color: var(--edge); }
+.rest {
+  display: flex; align-items: baseline; gap: 7px; width: 100%;
+  text-align: left; margin-bottom: 3px; padding: 5px 8px;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  border-left-width: 3px;
+}
+.rest .sent {
+  font-family: var(--math); font-size: 15px; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rest .count { font-size: 10.5px; color: var(--faint); flex: none; }
+.rest:not(:disabled):hover, .rest.lit {
+  background: var(--accent-soft); border-color: var(--edge);
+}
+.rest:disabled { cursor: default; }
+/* Coloured by what it costs.  A premise is free, an assumption nobody
+   gave you is the work that is left, and a discharged one is spent. */
+.rest.premise { border-left-color: var(--good); }
+.rest.extra { border-left-color: var(--slot); }
+.rest.closed { border-left-color: var(--edge); opacity: .6; }
+.rest.unused { border-left-color: var(--edge); opacity: .5; }
+.rest.unused .count { font-style: italic; }
+#rests .blanks { font-size: 12px; color: var(--muted); margin: 14px 0 0; }
 
 /* -- the palette -------------------------------------------------------- */
 #palette {

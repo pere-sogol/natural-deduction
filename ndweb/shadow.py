@@ -14,15 +14,18 @@ A hole draws as whatever is known of it with a ``?`` beside it::
     --------- ->I
     Q -> P ^ Q
 
-and it is deliberately not bracketed.  ``[phi]`` means an assumption the
-proof no longer rests on; an unfilled slot rests on nothing yet, so
-bracketing it would say something false and would then vanish once the
-slot was filled.  Giving a slot an empty assumption set is what keeps the
-renderer from doing that.
+An entirely blank slot draws as ``?`` alone, and rests on nothing.  What
+goes in it may not have been decided yet -- on a sandbox a rule can be put
+down long before there is any thought about what it will prove -- so
+there is no sentence for a step below to bracket, and giving it an empty
+assumption set is what keeps the renderer from inventing one.
 
-An entirely blank slot draws as ``?`` alone.  What goes in it may not have
-been decided yet -- on a sandbox a rule can be put down long before there
-is any thought about what it will prove.
+A slot with a sentence *written* in it is different: a sentence at the top
+of a step with nothing above it is assumed, so the slot rests on itself
+and is bracketed when a step below discharges it.  ``ndweb.realise`` makes
+that leaf a real ``Assumption``, and the assumption set drawn here is the
+one the engine computed for it, so the ``[phi]`` on the page and the
+``As(pi)`` the checker is working with cannot disagree.
 """
 
 from __future__ import annotations
@@ -108,10 +111,17 @@ def shadow(
 
 def _shadow(node: Node, realisation, solved: Solved, resolve) -> Shadow:
     if isinstance(node, Goal):
-        # No assumptions: a slot is not yet resting on anything, so no
-        # step below it may bracket it as discharged.
+        # A blank slot rests on nothing, so no step below it may bracket
+        # it as discharged.  One written into rests on itself, and the
+        # engine's own assumption set for that leaf is what says so.
         known = solved.formula(node.id)
-        return Shadow(known if known is not None else Unknown(), label="?", node=node)
+        proof = realisation.proofs.get(node.id) if realisation is not None else None
+        return Shadow(
+            known if known is not None else Unknown(),
+            label="?",
+            assumptions=proof.assumptions if proof is not None else frozenset(),
+            node=node,
+        )
 
     children = tuple(
         _shadow(child, realisation, solved, resolve) for child in node.children

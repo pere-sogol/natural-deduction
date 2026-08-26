@@ -94,6 +94,46 @@ class TestClasses(PageTestCase):
             self.assertRegex(self.css, r"\.{0}\b".format(name), name)
 
 
+class TestTheTracker(PageTestCase):
+    """The assumption panel reads fields off the state and paints tones.
+
+    Both go wrong silently in a browser -- ``undefined.length`` throws
+    where nobody is looking, and an unstyled row is merely a row that
+    looks like every other one -- so both are checked from here.
+    """
+
+    def sent(self):
+        from nd.formula import reset_arities
+        from ndweb.session import Session
+
+        reset_arities()
+        session = Session()
+        session.dispatch({"op": "new", "goal": "Q", "premises": ["P -> Q", "P"]})
+        return session.state()
+
+    def test_every_field_the_panel_reads_is_one_python_sends(self):
+        tracker = self.sent()["assumptions"]
+        wanted = set(re.findall(r"tracker\.(\w+)", self.render))
+        self.assertTrue(wanted, "the check found nothing to check")
+        self.assertEqual(sorted(wanted - set(tracker)), [])
+
+    def test_every_field_a_row_reads_is_one_python_sends(self):
+        rows = self.sent()["assumptions"]["premises"]
+        self.assertTrue(rows, "the check needs a row to check")
+        wanted = set(re.findall(r"row\.(\w+)", self.render))
+        self.assertTrue(wanted)
+        self.assertEqual(sorted(wanted - set(rows[0])), [])
+
+    def test_the_state_carries_the_blank_slots_the_status_counts(self):
+        self.assertIn("blankSlots", self.sent())
+        self.assertIn("state.blankSlots", self.app)
+
+    def test_every_tone_a_row_is_given_is_styled(self):
+        """An unstyled tone is a row that says nothing by being coloured."""
+        for name in ("premise", "extra", "closed", "unused"):
+            self.assertRegex(self.css, r"\.rest\.{0}\b".format(name), name)
+
+
 class TestStatuses(PageTestCase):
     def test_a_bar_is_drawn_wrong_unless_something_says_otherwise(self):
         """Styling by exception is what makes a new failure kind safe.

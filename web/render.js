@@ -51,7 +51,7 @@ function setLine(sentence, note) {
 }
 
 function setParams(params, nodeId) {
-  const row = el("div", "params");
+  const chips = el("div", "params");
   params.forEach(param => {
     const chip = el("div", "param " + param.source);
     chip.appendChild(el("span", "k", param.name));
@@ -62,9 +62,9 @@ function setParams(params, nodeId) {
     chip.dataset.node = nodeId;
     chip.dataset.text = param.text;
     chip.title = param.description;
-    row.appendChild(chip);
+    chips.appendChild(chip);
   });
-  return row;
+  return chips;
 }
 
 function setInference(node) {
@@ -190,6 +190,80 @@ function setPalette(state, into) {
       into.appendChild(button);
     });
   });
+}
+
+/* The assumption tracker.
+ *
+ * Every sentence at the top of a step with nothing above it is assumed,
+ * and the one question worth asking about it is whether it was given.  So
+ * the panel is that question, sorted: what the sequent handed over, what
+ * has been helped to besides, and what has been discharged on the way.
+ * Python decides all three; nothing here knows what a premise is.
+ *
+ * A row is a button because it goes somewhere -- clicking it selects the
+ * leaf it came from, which on a sheet several blocks wide is the only
+ * quick way to find the assumption a verdict is complaining about.
+ */
+function setRest(row, tone, badge) {
+  const line = el("button", "rest");
+  line.classList.add(tone);
+  const body = el("span", "sent");
+  row.pieces.forEach(piece => body.appendChild(el("span", piece.c, piece.t)));
+  line.appendChild(body);
+  if (badge) line.appendChild(el("span", "count", badge));
+  const where = row.nodes.length ? row.nodes : row.closed;
+  if (where.length) line.dataset.nodes = where.join(",");
+  else line.disabled = true;
+  return line;
+}
+
+/* ``×3`` counts the leaves, and is left off when there is only one --
+ * a bare "1" beside every row is noise, and the interesting number is
+ * the one that says a single discharge will close several leaves. */
+function restCount(row) {
+  const where = row.nodes.length ? row.nodes : row.closed;
+  return where.length > 1 ? "×" + where.length : "";
+}
+
+function setRests(state, into) {
+  into.textContent = "";
+  const tracker = state.assumptions;
+  into.appendChild(el("h2", null, "Assumptions"));
+
+  if (tracker.verdict) {
+    const tone = state.solved ? "verdict good" : "verdict warn";
+    into.appendChild(el("div", tone, tracker.verdict));
+  }
+
+  const sections = [
+    ["Given", tracker.premises, "premise",
+     "a premise: assuming it costs nothing"],
+    ["Still assuming", tracker.extra, "extra",
+     "not a premise — prove it, or discharge it"],
+    ["Discharged", tracker.closed, "closed",
+     "closed by a step below; it costs nothing now"],
+  ];
+  sections.forEach(([title, rows, tone, why]) => {
+    if (!rows.length) return;
+    into.appendChild(el("h3", null, title));
+    rows.forEach(row => {
+      const unused = tone === "premise" && !row.nodes.length && !row.closed.length;
+      const line = setRest(row, unused ? "unused" : tone,
+                           unused ? "unused" : restCount(row));
+      line.title = unused ? "nothing on the sheet assumes this yet" : why;
+      into.appendChild(line);
+    });
+  });
+
+  if (tracker.blanks.length) {
+    const note = el("p", "blanks",
+      tracker.blanks.length + " slot" +
+      (tracker.blanks.length === 1 ? " is" : "s are") + " still blank");
+    into.appendChild(note);
+  }
+  if (!tracker.premises.length && !tracker.extra.length && !tracker.closed.length) {
+    into.appendChild(el("p", "blanks", "Nothing is assumed yet."));
+  }
 }
 
 /* An input sized to what is in it, so a slot does not jump when it opens.
