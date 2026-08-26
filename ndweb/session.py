@@ -48,6 +48,7 @@ from ndweb.derivation import (
     detach_node,
     find,
     substitute_node,
+    walk,
 )
 from ndweb.exercises import EXERCISES, exercise
 from ndweb.refine import RefineError
@@ -306,6 +307,17 @@ class Session:
         left, taken = detach_node(holder.node, node_id, known)
         if taken is None:
             return self.state(notice="no such block")
+
+        # The slot left behind is a *new* node, and must be numbered as one.
+        # ``detach_node`` names it after the branch it replaces, which is
+        # right for one tree and wrong for a sheet: an id addresses a node
+        # across the whole document, so a slot sharing its number with the
+        # block now lying loose beside it would make writing into the slot
+        # rewrite the block that was just pulled out of it.
+        spare, document = document.fresh()
+        gap = next(node for node in walk(left) if node.id == node_id)
+        left = substitute_node(left, node_id, replace(gap, id=spare))
+
         cards = tuple(replace(c, node=left) if c is holder else c
                       for c in document.cards)
         cards = cards + (Card(taken, int(action.get("x", _DEFAULT[0])),
@@ -341,8 +353,6 @@ class Session:
 
 
 def _nodes(node: Node):
-    from ndweb.derivation import walk
-
     return list(walk(node))
 
 

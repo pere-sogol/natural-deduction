@@ -305,10 +305,18 @@ Whatever a block cannot settle stays an empty slot, because nothing is invented:
 `↔E` concluding `ψ` says nothing about which `φ` it came through, so it waits.
 Sentences you wrote are set in black, sentences the sheet worked out in grey.
 
-**Blocks join up.** Drag one onto an empty slot in another and it plugs in; drag
-a bar to pull that branch back off, leaving a slot that remembers what it said.
-A block that proves the wrong thing still goes in — its bar then tells you what
-it actually proves, which is more use than refusing it.
+**Blocks join up, and come apart again.** A block is picked up from anywhere on
+it — press on the paper, on a sentence, on the tab at the top, it makes no
+difference — and dropped on an empty slot in another it plugs in. A block that
+proves the wrong thing still goes in: its bar then tells you what it actually
+proves, which is more use than refusing it.
+
+Getting it back out is the same gesture in reverse. Every rule inside a block
+carries a small `⤴` handle, opposite the rule's label, which appears when the
+pointer is over that branch: click it and the branch lands beside the block,
+drag it and it lands where you let go — on the sheet, or straight into another
+slot. Dragging the bar itself does the same thing. What is left behind is a slot
+remembering what the branch said.
 
 Working downwards is the engine itself, not a second opinion about it: a premise
 slot holding `φ` with nothing above it *is* an assumption of `φ`, so the sheet

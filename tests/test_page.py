@@ -134,6 +134,33 @@ class TestTheTracker(PageTestCase):
             self.assertRegex(self.css, r"\.rest\.{0}\b".format(name), name)
 
 
+class TestTheHandles(PageTestCase):
+    """What the shell reaches for, the painter has to have put there.
+
+    The page carries the model's node numbers in ``data-`` attributes and
+    reads them back when the pointer lands on something.  Both halves fail
+    quietly: a hook nobody sets reads as ``undefined``, which reaches
+    Python as ``NaN`` and comes back as "no such block", and an operation
+    nobody handles comes back as "unknown action" in the notice bar.  In a
+    browser each of those looks like the editor doing nothing at all.
+    """
+
+    def test_every_data_hook_the_shell_reads_is_one_the_painter_sets(self):
+        read = set(re.findall(r"dataset\.(\w+)", self.app))
+        written = set(re.findall(r"dataset\.(\w+)\s*=", self.js))
+        self.assertTrue(read, "the check found nothing to check")
+        self.assertEqual(sorted(read - written), [])
+
+    def test_every_operation_the_shell_sends_is_one_the_session_handles(self):
+        from ndweb.session import Session
+
+        sent = set(re.findall(r'op:\s*"([\w-]+)"', self.js))
+        self.assertTrue(sent, "the check found nothing to check")
+        missing = [name for name in sorted(sent)
+                   if not hasattr(Session, "_op_" + name.replace("-", "_"))]
+        self.assertEqual(missing, [])
+
+
 class TestStatuses(PageTestCase):
     def test_a_bar_is_drawn_wrong_unless_something_says_otherwise(self):
         """Styling by exception is what makes a new failure kind safe.

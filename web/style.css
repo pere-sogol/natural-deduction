@@ -183,17 +183,41 @@ main { display: grid; grid-template-columns: 250px 1fr 240px; min-height: 0; }
 }
 #hint code { font-family: var(--mono); font-size: 12px; }
 
+/* A block is picked up from anywhere on it, which is what ``cursor: grab``
+   promises and what ``user-select`` has to give up for: a pointer pressed
+   on a sentence is on its way to moving the card, not selecting the word
+   under it.  The inline editor is the exception, and says so. */
 .card {
   position: absolute; background: var(--panel);
   border: 1px solid var(--edge); border-radius: 10px;
   padding: 12px 46px 12px 16px;
   box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 6px 18px rgba(0,0,0,.04);
+  cursor: grab; touch-action: none;
+  user-select: none; -webkit-user-select: none;
 }
+.card input { user-select: text; -webkit-user-select: text; cursor: text; }
 .card.complete { border-color: var(--good); }
 .card.solution { border-color: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+/* While it is being carried it is out of the way of the page underneath,
+   so that what is under the pointer is a slot it could go into rather
+   than the block itself. */
+.card.lifted {
+  pointer-events: none; z-index: 5; opacity: .93;
+  box-shadow: 0 4px 12px rgba(0,0,0,.13), 0 18px 40px rgba(0,0,0,.10);
+}
+body.grabbing, body.grabbing * { cursor: grabbing !important; }
+/* A branch travels as a copy, so the block it is leaving keeps its shape
+   until the pointer has said where it is going. */
+.ghost {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none;
+  background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 10px; padding: 10px 14px; opacity: .95;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+}
+.inf.pulling { opacity: .3; pointer-events: none; }
 .card .grip {
   position: absolute; left: 0; top: 0; right: 0; height: 12px;
-  cursor: grab; border-radius: 10px 10px 0 0;
+  border-radius: 10px 10px 0 0;
 }
 .card .grip::after {
   content: ""; position: absolute; left: 50%; top: 4px; width: 26px;
@@ -224,6 +248,32 @@ main { display: grid; grid-template-columns: 250px 1fr 240px; min-height: 0; }
   font: 600 11px/1 var(--ui); color: var(--muted); white-space: nowrap;
 }
 .bar .lab sup { font-size: .85em; font-weight: 400; }
+/* The bar is a line a pixel and a bit high, and it is also the handle a
+   branch comes off by.  The strip either side of it is part of the target
+   without being part of the drawing. */
+.card .bar { cursor: grab; }
+.card .bar::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -5px; height: 11px;
+}
+
+/* Getting a branch out again.  A block dropped into a slot is a block that
+   may have to come back out of it, so every rule but the whole block's own
+   carries a handle, opposite the rule's label: click it and the branch
+   lands beside the block, drag it and it lands where it is let go.  Only
+   the innermost one under the pointer shows, or a figure five deep would
+   sprout five of them. */
+.pull {
+  position: absolute; visibility: hidden; z-index: 2;
+  font: 12px/1 var(--ui); color: var(--muted);
+  background: var(--panel); border: 1px solid var(--edge);
+  border-radius: 5px; padding: 2px 5px; cursor: grab;
+}
+.inf:hover > .bar > .pull, .inf:hover > .line > .pull { visibility: visible; }
+.inf:has(.inf:hover) > .bar > .pull,
+.inf:has(.inf:hover) > .line > .pull { visibility: hidden; }
+.pull:hover { color: var(--accent); border-color: var(--accent); }
+.bar > .pull { right: 100%; top: -.95em; margin-right: .4em; }
+.line > .pull { right: 100%; top: -.1em; margin-right: .25em; }
 /* Styled by exception, so that a failure nobody thought to name here comes
    out looking wrong rather than looking right.  Only these three say the
    step is not simply broken. */
@@ -242,12 +292,18 @@ main { display: grid; grid-template-columns: 250px 1fr 240px; min-height: 0; }
 .bar.lit { border-top-color: var(--accent) !important; border-top-width: 3px; }
 
 /* -- a sentence --------------------------------------------------------- */
-.line { display: flex; align-items: baseline; white-space: nowrap; }
+.line { position: relative; display: flex; align-items: baseline;
+  white-space: nowrap; }
 .slot {
   font-family: var(--math); font-size: 17px; line-height: 1.35;
   padding: 1px 4px; border-radius: 4px; cursor: text;
   border: 1px solid transparent; display: inline-flex; align-items: baseline;
 }
+/* On the sheet a sentence is part of a block that is picked up from
+   anywhere, so it takes the card's cursor rather than promising a caret
+   the pointer is not about to give it.  What says a slot can be typed in
+   is the highlight under it, and the editor's own caret once it opens. */
+.card .slot { cursor: inherit; }
 .slot:hover { background: var(--accent-soft); }
 .slot.blank {
   min-width: 3.2em; min-height: 1.6em; border: 1px dashed var(--slot);

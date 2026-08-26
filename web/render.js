@@ -67,7 +67,7 @@ function setParams(params, nodeId) {
   return chips;
 }
 
-function setInference(node) {
+function setInference(node, root) {
   const box = el("div", "inf");
   box.dataset.id = node.id;
   box.dataset.status = node.status;
@@ -75,14 +75,15 @@ function setInference(node) {
 
   if (node.premises.length) {
     const above = el("div", "prem");
-    node.premises.forEach(child => above.appendChild(setInference(child)));
+    node.premises.forEach(child => above.appendChild(setInference(child, false)));
     box.appendChild(above);
   }
 
   /* A rule with nothing above it -- an assumption, or a = a -- has no
    * bar in the book either; its label goes beside the sentence. */
+  let bar = null;
   if (node.kind === "step" && node.premises.length) {
-    const bar = el("div", "bar");
+    bar = el("div", "bar");
     const label = el("span", "lab", node.label);
     if (node.number !== null && node.number !== undefined) {
       label.appendChild(el("sup", null, ", " + node.number));
@@ -90,13 +91,27 @@ function setInference(node) {
     }
     if (node.message) label.append(" ✗");
     bar.appendChild(label);
-    bar.title = node.message || node.rule + " — drag to pull this branch off";
-    bar.draggable = true;
+    bar.title = node.message
+      || node.rule + (root ? "" : " — drag the bar to pull this branch off");
     box.appendChild(bar);
   }
 
   const bare = node.kind === "step" && !node.premises.length;
-  box.appendChild(setLine(node.conclusion, bare ? node.label : ""));
+  const line = setLine(node.conclusion, bare ? node.label : "");
+  box.appendChild(line);
+
+  /* Every rule but the whole block's own gets a handle to come out by,
+   * opposite the rule's label.  A block dropped into a slot is a block
+   * that may have to be taken back out of it, and until this was here the
+   * only way was to catch a bar a pixel and a bit high.  A slot gets none:
+   * there is no block in it to take out, and what is written in one is
+   * cleared by selecting it and pressing delete. */
+  if (!root && node.kind === "step") {
+    const pull = el("button", "pull", "⤴");
+    pull.dataset.pull = node.id;
+    pull.title = "Lift this branch out onto the sheet — or drag it out";
+    (bar || line).appendChild(pull);
+  }
 
   if (node.kind === "step" && node.params.length) {
     box.appendChild(setParams(node.params, node.id));
@@ -114,9 +129,11 @@ function setCard(card, solution) {
   if (card.complete) box.classList.add("complete");
   if (solution) box.classList.add("solution");
 
+  /* The tab across the top is a picture of a handle and no longer the
+   * handle itself: the card is picked up from anywhere on it.  It stays
+   * because a block that can be moved should look like one. */
   const grip = el("div", "grip");
-  grip.draggable = true;
-  grip.dataset.grip = card.root;
+  grip.title = "Drag from anywhere on the block to move it";
   box.appendChild(grip);
 
   const bin = el("button", "bin", "×");
@@ -124,7 +141,7 @@ function setCard(card, solution) {
   bin.dataset.bin = card.root;
   box.appendChild(bin);
 
-  box.appendChild(setInference(card.tree));
+  box.appendChild(setInference(card.tree, true));
 
   if (card.complete) {
     const rests = card.open.length
