@@ -29,7 +29,7 @@ rule, and note the two kinds of place we knowingly diverge from it: the
 ## Commands
 
 ```sh
-python3 -m unittest discover -s tests -t .              # whole suite (405)
+python3 -m unittest discover -s tests -t .              # whole suite (447)
 python3 -m unittest tests.test_rules.TestExistential     # one class
 python3 -m unittest tests.test_formula.TestCapture.test_capture_is_refused
 python3 demo.py                                         # printable smoke demo
@@ -243,9 +243,19 @@ that leads nowhere; it cannot make the editor accept a bad proof.
 `nd.rules.__all__` is reachable from any `ndweb` module — a comment would not
 have survived.
 
-**`Goal.target` is optional.** A workspace where every hole had to announce what
-it would eventually contain could only be driven backwards from a goal. Blank
-slots are what make the board a board.
+**`Goal.target` is optional, and writing in it makes an assumption.** A
+workspace where every hole had to announce what it would eventually contain
+could only be driven backwards from a goal, so blank slots are what make the
+board a board. A slot *written into* is a different thing: a sentence at the top
+of a step with nothing above it is what the calculus calls a leaf, and a leaf is
+assumed. So `realise` stands it up as an `Assumption` — the engine's own, with
+every proviso biting on it — and a block whose holes have all been written into
+is a real proof of something. Whether it is a proof of what was *asked* for is
+then one question about its assumptions, which is `ndweb/assumptions.py`'s.
+
+The slot stays a slot: `open_goals` still lists it, and filling it with a
+derivation is what turns the assumption into something proved. Only a *blank*
+slot blocks, and `blank_goals` is that list.
 
 **The document is a flat forest of `Card`s, each with an `(x, y)`.** There is no
 `main` tree and no bench. A block becomes the answer by *proving* the sequent,
@@ -307,6 +317,26 @@ agree for every realisable step in the corpus, which is what keeps the copy
 honest — the same trick `parse(str(f)) == f` plays for the printer and the
 parser.
 
+**`assumptions.py` is the same bargain for `Proof.assumptions`.** One descent
+carries the set of sentences discharged on the way down and reports every leaf
+that is not in it, so a block with holes still says what it rests on — which
+`Proof.assumptions`, needing a finished proof, cannot. `tests/test_assumptions.py`
+requires the two to agree wherever both have an answer.
+
+Two leaves qualify and one does not: an `Assumption` block and a slot written
+into rest on themselves, `=Intro` on nothing — which is exactly what makes
+`a = a` a theorem. `SELF_RESTING` names the first, and a test walks the
+catalogue so a new leaf rule cannot quietly fall out of it. A sentence the
+editor merely *worked out* for a slot is nobody's assumption: `_written` reads
+the target, the claim, or the `CONCLUSION_PARAM` binding, never `solved.formula`.
+
+**Whether the sheet is finished is a question about assumptions.** A block
+proves the sequent when it concludes the goal and every sentence it still rests
+on is a premise — which is `Proof.proves`, unchanged. What is new is that the
+editor can now say *why not*: `Tally` sorts the premises from the rest, and
+`view._verdict` turns that into the one line worth reading. "Not yet" is no use;
+"P → Q is on the sheet, but it rests on R" is.
+
 **∀Intro backwards needs a parameter fresh in the *goal*, not merely arbitrary.**
 `generalise()` abstracts every occurrence, so refining `∀x Rxa` at `c = a` gives
 the subgoal `Raa`, which generalises to `∀x Rxx` — a branch that can never reach
@@ -338,9 +368,12 @@ numbering.
 
 **`shadow.py` is still what makes that possible.** `layout()` reads six members
 off a node and never asks whether it has a `Proof`, so a derivation with holes
-draws through the book's own renderer. A slot is given an empty assumption set
-so that no step below brackets it as discharged — it rests on nothing yet, and
-the bracket would then vanish once it was filled.
+draws through the book's own renderer. A *blank* slot is given an empty
+assumption set so that no step below brackets it as discharged — it rests on
+nothing yet, and the bracket would say something false. A slot written into
+rests on itself and takes the engine's own assumption set for that leaf, so it
+is bracketed when a step below closes it and the `[φ]ⁿ` on the page cannot
+disagree with the `As(π)` the checker is working with.
 
 **`typeset.pieces()` is a lossless lexer over the *printed* sentence.** It
 classifies each character — predicate, variable, constant, connective, subscript

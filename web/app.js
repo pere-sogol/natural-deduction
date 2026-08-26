@@ -33,13 +33,20 @@ function paint() {
   if (editing) return;
   $("sequent").textContent = state.sequent || "set a goal…";
 
+  /* A slot with a sentence in it is not a gap any more -- it is an
+   * assumption, and the tracker counts it as one.  Only the blank ones
+   * are still work of the sort "type something here". */
   const status = $("status");
+  const loose = state.assumptions.extra.length;
   if (state.solved) {
     status.textContent = "proved";
     status.className = "solved";
-  } else if (state.openSlots.length) {
-    status.textContent = state.openSlots.length + " slot" +
-      (state.openSlots.length === 1 ? "" : "s") + " to fill";
+  } else if (state.blankSlots.length) {
+    status.textContent = state.blankSlots.length + " slot" +
+      (state.blankSlots.length === 1 ? "" : "s") + " to fill";
+    status.className = "open";
+  } else if (loose) {
+    status.textContent = loose + " open assumption" + (loose === 1 ? "" : "s");
     status.className = "open";
   } else {
     status.textContent = "";
@@ -52,6 +59,7 @@ function paint() {
   $("hint").style.display = state.cards.length ? "none" : "";
 
   setPalette(state, $("palette"));
+  setRests(state, $("rests"));
 
   const sheet = $("cards");
   sheet.textContent = "";
@@ -280,6 +288,29 @@ function wire() {
       .forEach(n => n.classList.add("lit"));
   });
   sheet.addEventListener("mouseout", () => {
+    document.querySelectorAll(".lit").forEach(n => n.classList.remove("lit"));
+  });
+
+  /* An assumption in the panel goes somewhere: clicking selects the leaf
+   * it was made at, and hovering lights every leaf carrying that sentence
+   * at once -- which is the whole of why As(π) is a set of sentences and
+   * not of nodes, shown rather than explained. */
+  const rests = $("rests");
+  rests.addEventListener("click", event => {
+    const row = event.target.closest("[data-nodes]");
+    if (!row) return;
+    send({ op: "focus", node: Number(row.dataset.nodes.split(",")[0]) });
+  });
+  rests.addEventListener("mouseover", event => {
+    const row = event.target.closest("[data-nodes]");
+    if (!row) return;
+    row.classList.add("lit");
+    row.dataset.nodes.split(",").forEach(id => {
+      const found = $("cards").querySelector('.slot[data-slot="' + id + '"]');
+      if (found) found.classList.add("lit");
+    });
+  });
+  rests.addEventListener("mouseout", () => {
     document.querySelectorAll(".lit").forEach(n => n.classList.remove("lit"));
   });
 

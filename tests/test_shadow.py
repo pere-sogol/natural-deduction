@@ -65,12 +65,25 @@ class TestHoles(unittest.TestCase):
             ).strip("\n"),
         )
 
-    def test_a_goal_is_never_bracketed_as_discharged(self):
+    def test_a_blank_goal_is_never_bracketed_as_discharged(self):
         """It rests on nothing yet, so calling it closed would be false."""
+        goal = Goal(3)
+        step = Step(4, "→Intro", (goal,), (Binding("assumption", parse("P")),))
+        drawn = to_text(shadow(step, realise(step)))
+        self.assertNotIn("[", drawn)
+        self.assertIn("?", drawn)
+
+    def test_a_goal_written_into_is_bracketed_when_it_is_discharged(self):
+        """A sentence at the top of a step, above nothing, is assumed.
+
+        So the slot rests on itself and the step below closes it, exactly
+        as it would an ``Assumption`` block -- and the student watches the
+        discharge happen as they type rather than after they tidy up.
+        """
         goal = Goal(3, parse("P"))
         step = Step(4, "→Intro", (goal,), (Binding("assumption", parse("P")),))
         drawn = to_text(shadow(step, realise(step)))
-        self.assertNotIn("[P]", drawn)
+        self.assertIn("[P]¹", drawn)
         self.assertIn("?", drawn)
 
     def test_a_step_with_nothing_known_yet_draws_a_placeholder(self):
@@ -90,7 +103,9 @@ class TestHoles(unittest.TestCase):
         holed = substitute_node(root, 4, Goal(4, parse("Raa")))
         drawn = to_text(shadow(holed, realise(holed)))
         self.assertIn("∃x∀y(Rxy ↔ ¬Ryy)", drawn)
-        self.assertIn("Raa  ?", drawn)
+        # The hole keeps its ``?`` beside whatever is known of it -- here a
+        # sentence a step below goes on to discharge, so it is bracketed.
+        self.assertIn("[Raa]¹  ?", drawn)
 
 
 class TestUnknown(unittest.TestCase):

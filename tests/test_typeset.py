@@ -17,7 +17,7 @@ from nd.proofs import rule_catalogue
 from nd.render import layout
 
 from ndweb.catalogue import SCHEMA
-from ndweb.derivation import Card, Goal, Step
+from ndweb.derivation import Binding, Card, Goal, Step
 from ndweb.exercises import EXERCISES, solution
 from ndweb.realise import realise
 from ndweb.shadow import shadow
@@ -162,11 +162,32 @@ class TestTheNesting(unittest.TestCase):
         self.assertEqual(drawn["conclusion"]["source"], "blank")
         self.assertEqual(drawn["conclusion"]["pieces"], [])
 
-    def test_a_slot_is_never_bracketed_as_discharged(self):
-        """It rests on nothing yet; the bracket would vanish once filled."""
+    def test_a_slot_holding_something_else_is_not_bracketed(self):
+        """The step closes P; the slot says Q, so nothing is discharged."""
         step = Step(0, "→Intro", (Goal(1, parse("Q")),), (), parse("P -> Q"))
         drawn = typeset(step)
         self.assertIsNone(drawn["premises"][0]["conclusion"]["discharged"])
+
+    def test_a_slot_holding_what_the_step_closes_is_bracketed(self):
+        """Writing at the top of a step assumes it, so it can be closed."""
+        step = Step(0, "→Intro", (Goal(1, parse("P")),), (), parse("P -> P"))
+        drawn = typeset(step)
+        self.assertEqual(drawn["premises"][0]["conclusion"]["discharged"], 1)
+        self.assertEqual(drawn["number"], 1)
+
+    def test_a_blank_slot_is_never_bracketed(self):
+        """It rests on nothing yet; the bracket would say something false."""
+        step = Step(0, "→Intro", (Goal(1),), (Binding("assumption", parse("P")),))
+        drawn = typeset(step)
+        self.assertIsNone(drawn["premises"][0]["conclusion"]["discharged"])
+
+    def test_a_slot_the_engine_refuses_says_why_rather_than_staying_quiet(self):
+        """Fx is not a sentence, and no work above the slot will fix that."""
+        drawn = typeset(Step(0, "∨Intro", (Goal(1, parse("Fx")),), (),
+                             parse("P | P")))
+        slot = drawn["premises"][0]
+        self.assertEqual(slot["status"], "sentence")
+        self.assertIn("sentence", slot["message"])
 
     def test_a_step_waiting_on_a_branch_is_pending_rather_than_wrong(self):
         step = Step(0, "∧Intro", (Goal(1), Goal(2)))

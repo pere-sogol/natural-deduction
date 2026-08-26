@@ -36,6 +36,7 @@ from nd.formula import Formula
 from nd.proofs import rule
 from nd.render import layout
 
+from ndweb.assumptions import rests
 from ndweb.attempt import UNFINISHED
 from ndweb.catalogue import SCHEMA
 from ndweb.derivation import Goal, Node, Step, parameters
@@ -43,7 +44,7 @@ from ndweb.realise import Realisation, realise
 from ndweb.shadow import Shadow, Unknown, shadow
 from ndweb.unify import Solved, solve
 
-__all__ = ["pieces", "typeset", "card", "schema"]
+__all__ = ["pieces", "typeset", "card", "schema", "rest"]
 
 _BINARY = "∧∨→↔="
 _QUANTIFIERS = "∀∃"
@@ -232,6 +233,11 @@ def _node(
     sentence["slot"] = node_id
 
     if isinstance(origin, Goal):
+        # A slot written into is assumed, and an assumption can be refused
+        # -- ``Fx`` is not a sentence, so no line of a proof may be it.
+        # Nothing above a slot will ever fix that, so unlike a step waiting
+        # on its branches it is said rather than left to be discovered.
+        refusal = realisation.failures.get(node_id)
         return {
             "id": node_id,
             "kind": "slot",
@@ -241,9 +247,10 @@ def _node(
             "premises": [],
             "params": [],
             "conclusion": sentence,
-            "status": "blank" if known is None else "slot",
-            "message": "",
-            "detail": "",
+            "status": ("blank" if known is None
+                       else "slot" if refusal is None else refusal.kind),
+            "message": "" if refusal is None else refusal.message,
+            "detail": "" if refusal is None else refusal.detail,
             "note": "",
         }
 
@@ -300,12 +307,48 @@ def _params(step: Step, solved: Solved) -> List[Dict[str, Any]]:
     return found
 
 
-def card(document_card, base_available=frozenset()) -> Dict[str, Any]:
-    """One block of the sheet: where it sits, and what it says."""
+def rest(entry) -> Dict[str, Any]:
+    """One :class:`ndweb.assumptions.Rest`, ready to be set.
+
+    The sentence is cut up like any other, so the panel sets it in the
+    same face as the proof it came from and a student reads one thing
+    twice rather than two things once.
+    """
+    text = str(entry.formula)
+    return {
+        "text": text,
+        "pieces": pieces(text),
+        "nodes": list(entry.nodes),
+        "closed": list(entry.closed),
+        "slots": list(entry.slots),
+        "premise": entry.premise,
+        "open": entry.open,
+    }
+
+
+def card(
+    document_card,
+    base_available=frozenset(),
+    realisation: Optional[Realisation] = None,
+    solved: Optional[Solved] = None,
+) -> Dict[str, Any]:
+    """One block of the sheet: where it sits, and what it says.
+
+    ``realisation`` and ``solved`` may be passed in by a caller that has
+    already worked them out -- :func:`ndweb.view.view` has, because it
+    needs the proof itself to ask whether the sequent is settled.
+
+    ``base_available`` is the sequent's premises, doing double duty: what
+    may be assumed anywhere in the block, and which of the sentences it
+    rests on were given rather than helped to.
+    """
     root = document_card.node
-    solved = solve(root, base_available)
-    realisation = realise(root, solved)
+    if solved is None:
+        solved = solve(root, base_available)
+    if realisation is None:
+        realisation = realise(root, solved)
     proof = realisation.proof
+    resting = rests(root, base_available, solved)
     return {
         "root": root.id,
         "x": document_card.x,
@@ -313,6 +356,8 @@ def card(document_card, base_available=frozenset()) -> Dict[str, Any]:
         "tree": typeset(root, realisation, solved),
         "complete": realisation.complete,
         "conclusion": None if proof is None else str(proof.conclusion),
-        "open": sorted(str(f) for f in (proof.assumptions if proof else ())),
+        "open": sorted(str(entry.formula) for entry in resting if entry.open),
+        "assumptions": [rest(entry) for entry in resting],
         "openSlots": list(realisation.open_goals),
+        "blankSlots": list(realisation.blank_goals),
     }
