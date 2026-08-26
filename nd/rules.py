@@ -12,14 +12,15 @@ diagram.  That is worth knowing for two rules where the order surprises:
 takes the two case proofs before the disjunction they run on.
 
 Arguments a rule cannot recover from its subproofs are passed explicitly
-and declared in ``parameters``: which disjunct ``vIntro`` adds, which
+and declared in ``parameters``: which disjunction ``vIntro`` claims, which
 assumption ``->Intro`` discharges, which existential ``EIntro`` claims.
 
 Some rules verify a proposed conclusion instead of computing one.  ``EIntro``
 and ``=Elim`` replace *some* occurrences, not all -- from ``Raa`` one may
 infer ``Ex Rxa`` as well as ``Ex Rxx`` -- so there is nothing for them to
-compute.  ``^Elim`` has two conjuncts to choose between and no way to guess.
-In each case the caller supplies the conclusion and the rule checks it.
+compute.  ``^Elim`` has two conjuncts to choose between and no way to guess,
+and ``vIntro`` may add any disjunct at all.  In each case the caller supplies
+the conclusion and the rule checks it.
 """
 
 from __future__ import annotations
@@ -60,16 +61,14 @@ __all__ = [
     "EqualityIntro",
     "AndIntro",
     "AndElim",
-    "OrIntro1",
-    "OrIntro2",
+    "OrIntro",
     "OrElim",
     "ImpliesIntro",
     "ImpliesElim",
     "NotIntro",
     "NotElim",
     "IffIntro",
-    "IffElim1",
-    "IffElim2",
+    "IffElim",
     "ForallIntro",
     "ForallElim",
     "ExistsIntro",
@@ -292,40 +291,43 @@ class AndElim(Proof):
 
 
 @register
-class OrIntro1(Proof):
-    """(vIntro1) From phi_1 infer phi_1 v phi_2.
+class OrIntro(Proof):
+    """(vIntro) From phi infer any disjunction having phi as a disjunct.
 
-    The disjunct added is not determined by the premise, so it is given.
+    The reference states this as two rules, (vIntro1) adding a disjunct on
+    the right and (vIntro2) on the left.  Both are one premise, one node
+    and the same ``vI`` on the bar, and both had to be told the disjunct
+    they add; naming the whole disjunction instead says whether it went on
+    the left or the right at the same time, and says it where the student
+    was going to write it anyway.
     """
 
     __slots__ = ()
 
-    name = "∨Intro1"
+    name = "∨Intro"
     label = "∨I"
     subproof_count = 1
-    parameters = (Parameter("right", "formula", "the disjunct added on the right"),)
+    parameters = (
+        Parameter("conclusion", "formula", "the disjunction claimed, phi v psi"),
+    )
 
-    def __init__(self, pi1: Proof, right: Formula) -> None:
+    def __init__(self, pi1: Proof, conclusion: Formula) -> None:
         _check_subproof(pi1, self.name, "pi_1")
-        _check_formula(right, self.name, "the disjunct added")
-        self._seal(Or(pi1.conclusion, right), (pi1,))
-
-
-@register
-class OrIntro2(Proof):
-    """(vIntro2) From phi_2 infer phi_1 v phi_2."""
-
-    __slots__ = ()
-
-    name = "∨Intro2"
-    label = "∨I"
-    subproof_count = 1
-    parameters = (Parameter("left", "formula", "the disjunct added on the left"),)
-
-    def __init__(self, pi1: Proof, left: Formula) -> None:
-        _check_subproof(pi1, self.name, "pi_1")
-        _check_formula(left, self.name, "the disjunct added")
-        self._seal(Or(left, pi1.conclusion), (pi1,))
+        _check_formula(conclusion, self.name, "the conclusion")
+        if not isinstance(conclusion, Or):
+            raise ShapeError(
+                self.name,
+                "the conclusion must be a disjunction, not {0}".format(conclusion),
+            )
+        premise = pi1.conclusion
+        if premise not in (conclusion.left, conclusion.right):
+            raise MismatchError(
+                self.name,
+                "pi_1 concludes {0}, which is neither disjunct of {1}".format(
+                    premise, conclusion
+                ),
+            )
+        self._seal(conclusion, (pi1,))
 
 
 @register
@@ -513,49 +515,39 @@ class IffIntro(Proof):
 
 
 @register
-class IffElim1(Proof):
-    """(<->Elim1) From phi_1 <-> phi_2 and phi_1 infer phi_2."""
+class IffElim(Proof):
+    """(<->Elim) From phi_1 <-> phi_2 and either half, infer the other.
+
+    The reference states this as two rules, (<->Elim1) running left to
+    right and (<->Elim2) right to left.  Here the half supplied decides
+    the direction, so nothing has to be chosen before ``pi_2`` exists and
+    the rule needs no parameter at all: given the biconditional and one of
+    its halves, the conclusion is the other, and there is nothing left to
+    say.  A finished proof looked the same either way in any case -- one
+    ``<->E`` on the bar, over the same two premises.
+    """
 
     __slots__ = ()
 
-    name = "↔Elim1"
+    name = "↔Elim"
     label = "↔E"
     subproof_count = 2
 
     def __init__(self, pi1: Proof, pi2: Proof) -> None:
         biconditional = _concluding(pi1, Iff, self.name, "pi_1")
         _check_subproof(pi2, self.name, "pi_2")
-        if biconditional.left != pi2.conclusion:
+        half = pi2.conclusion
+        if half == biconditional.left:
+            self._seal(biconditional.right, (pi1, pi2))
+        elif half == biconditional.right:
+            self._seal(biconditional.left, (pi1, pi2))
+        else:
             raise MismatchError(
                 self.name,
-                "the left half of {0} is {1}, but pi_2 concludes {2}".format(
-                    biconditional, biconditional.left, pi2.conclusion
+                "pi_2 concludes {0}, which is neither half of {1}".format(
+                    half, biconditional
                 ),
             )
-        self._seal(biconditional.right, (pi1, pi2))
-
-
-@register
-class IffElim2(Proof):
-    """(<->Elim2) From phi_1 <-> phi_2 and phi_2 infer phi_1."""
-
-    __slots__ = ()
-
-    name = "↔Elim2"
-    label = "↔E"
-    subproof_count = 2
-
-    def __init__(self, pi1: Proof, pi2: Proof) -> None:
-        biconditional = _concluding(pi1, Iff, self.name, "pi_1")
-        _check_subproof(pi2, self.name, "pi_2")
-        if biconditional.right != pi2.conclusion:
-            raise MismatchError(
-                self.name,
-                "the right half of {0} is {1}, but pi_2 concludes {2}".format(
-                    biconditional, biconditional.right, pi2.conclusion
-                ),
-            )
-        self._seal(biconditional.left, (pi1, pi2))
 
 
 # --------------------------------------------------------------------------

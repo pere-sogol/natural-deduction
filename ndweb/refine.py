@@ -131,19 +131,18 @@ class Probe:
 #: How much the target settles, per rule.  Drives the palette's grouping.
 BACKWARD = {
     "Assumption": "determined", "=Intro": "determined",
-    "∧Intro": "determined", "∨Intro1": "determined", "∨Intro2": "determined",
+    "∧Intro": "determined", "∨Intro": "formula",
     "→Intro": "determined", "↔Intro": "determined",
     "∧Elim": "formula", "→Elim": "formula",
     "∨Elim": "formula", "¬Intro": "formula", "¬Elim": "formula",
-    "↔Elim1": "formula", "↔Elim2": "formula", "∀Elim": "formula",
+    "↔Elim": "formula", "∀Elim": "formula",
     "∃Elim": "formula", "=Elim1": "formula", "=Elim2": "formula",
     "∀Intro": "constant", "∃Intro": "constant",
 }
 
 _SHAPES = {
     "∧Intro": (And, "a conjunction"),
-    "∨Intro1": (Or, "a disjunction"),
-    "∨Intro2": (Or, "a disjunction"),
+    "∨Intro": (Or, "a disjunction"),
     "→Intro": (Implies, "a conditional"),
     "↔Intro": (Iff, "a biconditional"),
     "¬Intro": (Not, "a negation"),
@@ -264,17 +263,24 @@ def fields(rule_name: str, target: Formula, context: Optional[Context] = None):
                       "a sentence psi you can derive along with its negation",
                       tuple(str(f) for f in sorted(context.available, key=str))[:6]),)
 
-    if rule_name == "↔Elim1":
-        return (Field("other", "formula", "the left half of the biconditional",
+    if rule_name == "↔Elim":
+        return (Field("biconditional", "formula",
+                      "the biconditional with {0} as one of its halves".format(
+                          target),
                       _shaped_suggestions(
                           context, Iff,
-                          lambda f: f.left if f.right == target else None)),)
+                          lambda f: f if target in (f.left, f.right) else None)),)
 
-    if rule_name == "↔Elim2":
-        return (Field("other", "formula", "the right half of the biconditional",
-                      _shaped_suggestions(
-                          context, Iff,
-                          lambda f: f.right if f.left == target else None)),)
+    if rule_name == "∨Intro":
+        # Which half will be proved is the student's to say, but if just one
+        # of them is already in scope, saying it back is not a guess.
+        halves = (target.left, target.right)
+        inside = [half for half in halves if half in context.available]
+        return (Field("disjunct", "formula",
+                      "the half of {0} you will prove".format(target),
+                      tuple(str(half) for half in inside)
+                      + tuple(str(half) for half in halves if half not in inside),
+                      str(inside[0]) if len(inside) == 1 else ""),)
 
     if rule_name == "∀Elim":
         return (Field("universal", "formula",
@@ -347,13 +353,14 @@ def refine(
     if rule_name == "∧Intro":
         return Refinement((Subgoal(target.left), Subgoal(target.right)))
 
-    if rule_name == "∨Intro1":
-        return Refinement((Subgoal(target.left),),
-                          (Binding("right", target.right),))
-
-    if rule_name == "∨Intro2":
-        return Refinement((Subgoal(target.right),),
-                          (Binding("left", target.left),))
+    if rule_name == "∨Intro":
+        disjunct = _formula(inputs, "disjunct", "the half you will prove")
+        if disjunct not in (target.left, target.right):
+            raise RefineError(
+                "{0} is neither half of {1}, so proving it would not give the "
+                "goal".format(disjunct, target)
+            )
+        return Refinement((Subgoal(disjunct),), (Binding("conclusion", target),))
 
     if rule_name == "→Intro":
         return Refinement(
@@ -418,11 +425,22 @@ def refine(
             (Binding("conclusion", target),),
         )
 
-    if rule_name in ("↔Elim1", "↔Elim2"):
-        other = _formula(inputs, "other", "the other half of the biconditional")
-        biconditional = (
-            Iff(other, target) if rule_name == "↔Elim1" else Iff(target, other)
-        )
+    if rule_name == "↔Elim":
+        biconditional = _formula(inputs, "biconditional", "the biconditional")
+        if not isinstance(biconditional, Iff):
+            raise RefineError(
+                "{0} is not a biconditional, so there are no halves to swap"
+                .format(biconditional)
+            )
+        if target == biconditional.left:
+            other = biconditional.right
+        elif target == biconditional.right:
+            other = biconditional.left
+        else:
+            raise RefineError(
+                "{0} is neither half of {1}, so this rule cannot reach it"
+                .format(target, biconditional)
+            )
         return Refinement((Subgoal(biconditional), Subgoal(other)))
 
     if rule_name == "∀Intro":

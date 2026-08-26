@@ -94,7 +94,7 @@ class RuleError(ProofError):
 class ShapeError(RuleError):
     """A subproof's conclusion has the wrong main connective.
 
-    Applying ``^Elim1`` to a proof of a disjunction, for instance.
+    Applying ``^Elim`` to a proof of a disjunction, for instance.
     """
 
 
@@ -124,7 +124,7 @@ class ProvisoError(RuleError):
 class Parameter:
     """An argument a rule needs besides its subproofs.
 
-    ``vIntro1`` must be told which disjunct to add, ``->Intro`` which
+    ``vIntro`` must be told the disjunction it claims, ``->Intro`` which
     assumption to discharge, ``EIntro`` which existential is being claimed.
     None of these is recoverable from the subproofs, so each rule declares
     them and a user interface can ask for exactly what is missing.

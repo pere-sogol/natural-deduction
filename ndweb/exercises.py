@@ -108,9 +108,9 @@ def _identity(b: Builder) -> Node:
 def _excluded_middle(b: Builder) -> Node:
     p, not_p = parse("P"), parse("~P")
     goal, denial = parse("P | ~P"), parse("~(P | ~P)")
-    left = b.step("∨Intro1", [b.assume(p)], right=not_p)
+    left = b.step("∨Intro", [b.assume(p)], conclusion=goal)
     negated = b.step("¬Intro", [left, b.assume(denial)], assumption=p)
-    right = b.step("∨Intro2", [negated], left=p)
+    right = b.step("∨Intro", [negated], conclusion=goal)
     return b.step("¬Elim", [right, b.assume(denial)], conclusion=goal)
 
 
@@ -162,9 +162,9 @@ def _de_morgan(b: Builder) -> Node:
     p, q = parse("P"), parse("Q")
     not_p, not_q = parse("~P"), parse("~Q")
     goal, denial = parse("~P | ~Q"), parse("~(~P | ~Q)")
-    left = b.step("∨Intro1", [b.assume(not_p)], right=not_q)
+    left = b.step("∨Intro", [b.assume(not_p)], conclusion=goal)
     got_p = b.step("¬Elim", [left, b.assume(denial)], conclusion=p)
-    right = b.step("∨Intro2", [b.assume(not_q)], left=not_p)
+    right = b.step("∨Intro", [b.assume(not_q)], conclusion=goal)
     got_q = b.step("¬Elim", [right, b.assume(denial)], conclusion=q)
     both = b.step("∧Intro", [got_p, got_q])
     return b.step("¬Elim", [both, b.assume(parse("~(P & Q)"))], conclusion=goal)
@@ -178,11 +178,11 @@ def _russell(b: Builder) -> Node:
     def denial():
         """A fresh proof of ~Raa from the instance -- needed twice over."""
         biconditional = b.step("∀Elim", [b.assume(instance)], constant=a)
-        forwards = b.step("↔Elim1", [biconditional, b.assume(raa)])
+        forwards = b.step("↔Elim", [biconditional, b.assume(raa)])
         return b.step("¬Intro", [b.assume(raa), forwards], assumption=raa)
 
     biconditional = b.step("∀Elim", [b.assume(instance)], constant=a)
-    got_raa = b.step("↔Elim2", [biconditional, denial()])
+    got_raa = b.step("↔Elim", [biconditional, denial()])
     explosion = b.step("¬Elim", [got_raa, denial()], conclusion=p)
     return b.step("∃Elim", [b.assume(premise), explosion], constant=a)
 

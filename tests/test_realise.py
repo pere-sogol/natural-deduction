@@ -95,6 +95,36 @@ class TestFailureIsLocal(RealiseTestCase):
         self.assertIn("conjunction", failure.message)
 
 
+class TestEmptySlots(RealiseTestCase):
+    """A rule put down and not yet filled in is unfinished, not broken."""
+
+    def test_a_parameter_nobody_has_filled_in_says_which_one(self):
+        step = self.builder.step("∧Elim", [self.builder.assume(parse("P & Q"))])
+        failure = realise(step).failures[step.id]
+        self.assertEqual(failure.kind, "incomplete")
+        self.assertEqual(failure.message, "the conclusion is still empty")
+
+    def test_it_is_not_reported_as_a_bug_in_the_editor(self):
+        """Python would raise TypeError here, which reads as our mistake."""
+        step = self.builder.step("∧Elim", [self.builder.assume(parse("P & Q"))])
+        failure = realise(step).failures[step.id]
+        self.assertFalse(failure.is_bug)
+        self.assertNotIn("wrongly", failure.message)
+
+    def test_several_empty_parameters_are_named_together(self):
+        step = self.builder.step("∀Intro", [self.builder.assume(parse("Fa"))])
+        self.assertEqual(
+            realise(step).failures[step.id].message,
+            "the constant and the variable are still empty",
+        )
+
+    def test_a_parameter_the_rule_does_not_insist_on_is_not_asked_for(self):
+        """EIntro will search for its constant; only the conclusion is needed."""
+        step = self.builder.step(
+            "∃Intro", [self.builder.assume(parse("Fa"))], claim=parse("Ex Fx"))
+        self.assertEqual(realise(step).failures, {})
+
+
 class TestDrift(RealiseTestCase):
     def test_a_step_that_no_longer_proves_its_claim_says_so(self):
         """Editing above a step can change what it concludes; say where."""

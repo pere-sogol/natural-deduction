@@ -19,8 +19,7 @@ from nd.rules import (
     NotElim,
     NotIntro,
     OrElim,
-    OrIntro1,
-    OrIntro2,
+    OrIntro,
 )
 
 
@@ -168,17 +167,18 @@ class TestDrawing(RenderTestCase):
         )
 
     def test_no_line_carries_trailing_space(self):
+        excluded = parse("P | ~P")
         proof = NotElim(
-            OrIntro2(
+            OrIntro(
                 NotIntro(
-                    OrIntro1(Assumption(parse("P")), parse("~P")),
+                    OrIntro(Assumption(parse("P")), excluded),
                     Assumption(parse("~(P | ~P)")),
                     parse("P"),
                 ),
-                parse("P"),
+                excluded,
             ),
             Assumption(parse("~(P | ~P)")),
-            parse("P | ~P"),
+            excluded,
         )
         for line in to_text(proof).split("\n"):
             self.assertEqual(line, line.rstrip())

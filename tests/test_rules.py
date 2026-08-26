@@ -21,16 +21,14 @@ from nd.rules import (
     ExistsIntro,
     ForallElim,
     ForallIntro,
-    IffElim1,
-    IffElim2,
+    IffElim,
     IffIntro,
     ImpliesElim,
     ImpliesIntro,
     NotElim,
     NotIntro,
     OrElim,
-    OrIntro1,
-    OrIntro2,
+    OrIntro,
     _replaces_some,
 )
 
@@ -84,13 +82,26 @@ class TestConjunction(RuleTestCase):
 
 
 class TestDisjunction(RuleTestCase):
-    def test_intro_adds_the_disjunct_it_is_given(self):
+    def test_intro_adds_a_disjunct_on_either_side(self):
+        """One rule, not two: the whole disjunction says which side."""
         proof = Assumption(parse("P"))
         self.assertEqual(
-            OrIntro1(proof, parse("Q")).conclusion, parse("P | Q")
+            OrIntro(proof, parse("P | Q")).conclusion, parse("P | Q")
         )
         self.assertEqual(
-            OrIntro2(proof, parse("Q")).conclusion, parse("Q | P")
+            OrIntro(proof, parse("Q | P")).conclusion, parse("Q | P")
+        )
+
+    def test_intro_refuses_a_disjunction_the_premise_is_no_part_of(self):
+        self.assertRefuses(
+            MismatchError, "neither disjunct",
+            OrIntro, Assumption(parse("P")), parse("Q | S"),
+        )
+
+    def test_intro_needs_a_disjunction_to_claim(self):
+        self.assertRefuses(
+            ShapeError, "must be a disjunction",
+            OrIntro, Assumption(parse("P")), parse("P & Q"),
         )
 
     def test_elim(self):
@@ -188,9 +199,9 @@ class TestNegation(RuleTestCase):
     def test_excluded_middle_is_a_theorem(self):
         excluded = parse("P | ~P")
         denial = Assumption(parse("~(P | ~P)"))
-        left = OrIntro1(Assumption(parse("P")), parse("~P"))
+        left = OrIntro(Assumption(parse("P")), excluded)
         not_p = NotIntro(left, denial, parse("P"))
-        right = OrIntro2(not_p, parse("P"))
+        right = OrIntro(not_p, excluded)
         proof = NotElim(right, denial, excluded)
         self.assertEqual(proof.conclusion, excluded)
         self.assertTrue(proof.is_theorem())
@@ -222,30 +233,31 @@ class TestBiconditional(RuleTestCase):
         self.assertEqual(proof.conclusion, parse("P <-> P"))
         self.assertTrue(proof.is_theorem())
 
-    def test_elim(self):
+    def test_elim_runs_whichever_way_the_half_it_is_given_points(self):
+        """One rule, not two, and it needs no parameter to tell them apart."""
         biconditional = Assumption(parse("P <-> Q"))
         self.assertEqual(
-            IffElim1(biconditional, Assumption(parse("P"))).conclusion, parse("Q")
+            IffElim(biconditional, Assumption(parse("P"))).conclusion, parse("Q")
         )
         self.assertEqual(
-            IffElim2(biconditional, Assumption(parse("Q"))).conclusion, parse("P")
+            IffElim(biconditional, Assumption(parse("Q"))).conclusion, parse("P")
         )
 
-    def test_elim_needs_the_right_half(self):
-        biconditional = Assumption(parse("P <-> Q"))
+    def test_elim_needs_one_half_or_the_other(self):
         self.assertRefuses(
-            MismatchError, "the left half of",
-            IffElim1, biconditional, Assumption(parse("Q")),
+            MismatchError, "neither half",
+            IffElim, Assumption(parse("P <-> Q")), Assumption(parse("S")),
         )
-        self.assertRefuses(
-            MismatchError, "the right half of",
-            IffElim2, biconditional, Assumption(parse("P")),
-        )
+
+    def test_elim_of_a_biconditional_of_one_sentence_with_itself(self):
+        """P <-> P points both ways at once, and either reading gives P."""
+        proof = IffElim(Assumption(parse("P <-> P")), Assumption(parse("P")))
+        self.assertEqual(proof.conclusion, parse("P"))
 
     def test_elim_needs_a_biconditional(self):
         self.assertRefuses(
             ShapeError, "must conclude with a biconditional",
-            IffElim1, Assumption(parse("P -> Q")), Assumption(parse("P")),
+            IffElim, Assumption(parse("P -> Q")), Assumption(parse("P")),
         )
 
 

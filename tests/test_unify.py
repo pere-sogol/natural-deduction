@@ -152,12 +152,12 @@ class TestTheTwoTogether(UnifyTestCase):
         self.assertEqual(forwards, backwards)
 
     def test_what_the_conclusion_cannot_settle_is_left_alone(self):
-        """↔Elim1 concluding ψ says nothing about which φ it came through.
+        """↔Elim concluding ψ says nothing about which φ it came through.
 
         Nothing is invented for it: the premise stays an empty slot, and a
         student writes the biconditional in when they know it.
         """
-        found = solve(self.block("↔Elim1", (None, None), claim="Q"))
+        found = solve(self.block("↔Elim", (None, None), claim="Q"))
         self.assertNotIn(1, found.formulas)
         self.assertNotIn(2, found.formulas)
 

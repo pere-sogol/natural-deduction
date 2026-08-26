@@ -24,16 +24,14 @@ CASES = {
     "=Intro": ("a=a", {}),
     "∧Intro": ("P & Q", {}),
     "∧Elim": ("P", {"conjunction": "P & Q"}),
-    "∨Intro1": ("P | Q", {}),
-    "∨Intro2": ("P | Q", {}),
+    "∨Intro": ("P | Q", {"disjunct": "P"}),
     "∨Elim": ("S", {"disjunction": "P | Q"}),
     "→Intro": ("P -> Q", {}),
     "→Elim": ("Q", {"antecedent": "P"}),
     "¬Intro": ("~P", {"witness": "Q"}),
     "¬Elim": ("P", {"witness": "Q"}),
     "↔Intro": ("P <-> Q", {}),
-    "↔Elim1": ("Q", {"other": "P"}),
-    "↔Elim2": ("P", {"other": "Q"}),
+    "↔Elim": ("Q", {"biconditional": "P <-> Q"}),
     "∀Intro": ("Ax x=x", {"constant": "a"}),
     "∀Elim": ("Fa", {"universal": "Ax Fx"}),
     "∃Intro": ("Ex Fx", {"constant": "a"}),
@@ -93,7 +91,7 @@ class TestRoundTrip(RefineTestCase):
 class TestShapeGating(RefineTestCase):
     def test_an_introduction_refuses_a_goal_of_the_wrong_shape(self):
         for name, wrong in (
-            ("∧Intro", "P | Q"), ("∨Intro1", "P & Q"), ("→Intro", "P & Q"),
+            ("∧Intro", "P | Q"), ("∨Intro", "P & Q"), ("→Intro", "P & Q"),
             ("↔Intro", "P -> Q"), ("¬Intro", "P"), ("∀Intro", "Ex Fx"),
             ("∃Intro", "Ax Fx"), ("=Intro", "P"),
         ):
@@ -252,10 +250,10 @@ class TestMissingInput(RefineTestCase):
 class TestProbe(RefineTestCase):
     def test_it_reports_every_rule_with_a_reason_when_unavailable(self):
         found = dict((p.rule, p) for p in probe(parse("P & Q"), Context()))
-        self.assertEqual(len(found), 20)
+        self.assertEqual(len(found), 18)
         self.assertTrue(found["∧Intro"].available)
-        self.assertFalse(found["∨Intro1"].available)
-        self.assertIn("disjunction", found["∨Intro1"].reason)
+        self.assertFalse(found["∨Intro"].available)
+        self.assertIn("disjunction", found["∨Intro"].reason)
 
     def test_classical_negation_is_offered_for_any_goal(self):
         """It is how excluded middle is reached, so it must never be hidden."""

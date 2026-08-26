@@ -158,11 +158,15 @@ class TestInvariants(ProofTestCase):
         self.assertEqual(len({first, second}), 1)
 
     def test_different_rules_reaching_one_conclusion_differ(self):
-        # P v P follows from P either way, but the proofs are not the same.
-        from nd.rules import OrIntro1, OrIntro2
+        # Both reach ~P from the same contradictory pair, discharging
+        # different things on the way; the rule is part of the identity.
+        from nd.formula import Not
+        from nd.rules import NotElim, NotIntro
 
-        leaf = Assumption(self.p)
-        self.assertNotEqual(OrIntro1(leaf, self.p), OrIntro2(leaf, self.p))
+        psi, not_psi = Assumption(self.q), Assumption(Not(self.q))
+        self.assertNotEqual(
+            NotIntro(psi, not_psi, self.p), NotElim(psi, not_psi, Not(self.p))
+        )
 
     def test_one_rule_reaching_two_conclusions_differs_from_itself(self):
         # ^Elim is one rule taking either conjunct, so the conjunct taken
@@ -188,7 +192,7 @@ class TestRegistry(ProofTestCase):
     """What a user interface builds its palette from."""
 
     def test_every_rule_is_registered_under_both_spellings(self):
-        self.assertEqual(len(rule_catalogue()), 20)
+        self.assertEqual(len(rule_catalogue()), 18)
         for cls in rule_catalogue():
             self.assertIs(rule(cls.name), cls)
             self.assertIs(rule(cls.__name__), cls)
