@@ -73,8 +73,7 @@ __all__ = [
     "ForallElim",
     "ExistsIntro",
     "ExistsElim",
-    "EqualityElim1",
-    "EqualityElim2",
+    "EqualityElim",
 ]
 
 
@@ -760,13 +759,27 @@ class ExistsElim(Proof):
 # --------------------------------------------------------------------------
 
 
-class _EqualityElim(Proof):
-    """Shared behaviour of the two directions of identity elimination."""
+@register
+class EqualityElim(Proof):
+    """(=Elim) From c_1 = c_2 and phi infer phi with one constant put for
+    the other, either way about.
+
+    The reference states this as two rules, (=Elim1) rewriting c_1 as c_2
+    and (=Elim2) c_2 as c_1.  An identity is symmetric and the bar says
+    ``=E`` whichever way it was read, so a finished proof cannot tell you
+    which; the conclusion the caller proposes settles it instead.
+
+    That conclusion has to be proposed rather than computed, as it did for
+    each half of the pair: the rule replaces *some* occurrences, not all,
+    so ``Raa`` and ``a=b`` reach ``Rab``, ``Rba`` and ``Rbb`` alike.  Both
+    directions are tried and either will do.
+    """
 
     __slots__ = ()
 
-    subproof_count = 2
+    name = "=Elim"
     label = "=E"
+    subproof_count = 2
     parameters = (
         Parameter(
             "conclusion",
@@ -776,43 +789,23 @@ class _EqualityElim(Proof):
         ),
     )
 
-    #: True to replace the left constant by the right, False for the reverse.
-    forwards = True
-
     def __init__(self, pi1: Proof, pi2: Proof, conclusion: Formula) -> None:
         identity = _concluding(pi1, Equality, self.name, "pi_1")
         _check_subproof(pi2, self.name, "pi_2")
         _check_formula(conclusion, self.name, "the conclusion")
-        old, new = (
-            (identity.left, identity.right)
-            if self.forwards
-            else (identity.right, identity.left)
-        )
-        if not _replaces_some(pi2.conclusion, conclusion, old, new):
+        premise = pi2.conclusion
+        left, right = identity.left, identity.right
+        if not (
+            _replaces_some(premise, conclusion, left, right)
+            or _replaces_some(premise, conclusion, right, left)
+        ):
+            directions = "occurrences of {0} replaced by {1}".format(left, right)
+            if left != right:
+                directions += ", or of {0} by {1}".format(right, left)
             raise MismatchError(
                 self.name,
-                "{0} is not {1} with occurrences of {2} replaced by {3}".format(
-                    conclusion, pi2.conclusion, old, new
+                "{0} is not {1} with {2}".format(
+                    conclusion, premise, directions
                 ),
             )
         self._seal(conclusion, (pi1, pi2))
-
-
-@register
-class EqualityElim1(_EqualityElim):
-    """(=Elim1) From c_1 = c_2 and phi infer phi with c_2 put for c_1."""
-
-    __slots__ = ()
-
-    name = "=Elim1"
-    forwards = True
-
-
-@register
-class EqualityElim2(_EqualityElim):
-    """(=Elim2) From c_1 = c_2 and phi infer phi with c_1 put for c_2."""
-
-    __slots__ = ()
-
-    name = "=Elim2"
-    forwards = False

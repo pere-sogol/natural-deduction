@@ -74,8 +74,7 @@ CONCLUSION_PARAM = {
     "∨Intro": "conclusion",
     "¬Elim": "conclusion",
     "∃Intro": "conclusion",
-    "=Elim1": "conclusion",
-    "=Elim2": "conclusion",
+    "=Elim": "conclusion",
 }
 
 

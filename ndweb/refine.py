@@ -136,7 +136,7 @@ BACKWARD = {
     "∧Elim": "formula", "→Elim": "formula",
     "∨Elim": "formula", "¬Intro": "formula", "¬Elim": "formula",
     "↔Elim": "formula", "∀Elim": "formula",
-    "∃Elim": "formula", "=Elim1": "formula", "=Elim2": "formula",
+    "∃Elim": "formula", "=Elim": "formula",
     "∀Intro": "constant", "∃Intro": "constant",
 }
 
@@ -212,6 +212,24 @@ def _shaped_suggestions(context: Context, kind, pick) -> Tuple[str, ...]:
             if value is not None and str(value) not in found:
                 found.append(str(value))
     return tuple(found)
+
+
+def _unrewritten(target: Formula, identity: Equality) -> Formula:
+    """What ``=Elim`` would have rewritten to reach ``target``.
+
+    One rule reading an identity both ways leaves two candidates, and the
+    useful one is whichever actually changes something: reaching ``Rbb``
+    through ``a=b`` means starting from ``Raa``, and undoing the other
+    direction would propose ``Rbb`` itself, which rewrites to nothing.
+    When both directions bite -- a goal holding both constants -- the
+    first is offered and the student can write the source instead.
+    """
+    left, right = identity.left, identity.right
+    for candidate in (_replace_all(target, right, left),
+                      _replace_all(target, left, right)):
+        if candidate != target:
+            return candidate
+    return target
 
 
 def _replace_all(formula: Formula, old: Constant, new: Constant) -> Formula:
@@ -298,7 +316,7 @@ def fields(rule_name: str, target: Formula, context: Optional[Context] = None):
                   default=str(fresh_constant(avoid))),
         )
 
-    if rule_name in ("=Elim1", "=Elim2"):
+    if rule_name == "=Elim":
         return (
             Field("identity", "formula", "the identity to apply",
                   _shaped_suggestions(context, Equality, lambda f: f)),
@@ -522,20 +540,15 @@ def refine(
             warnings,
         )
 
-    if rule_name in ("=Elim1", "=Elim2"):
+    if rule_name == "=Elim":
         identity = _formula(inputs, "identity", "an identity c1 = c2")
         if not isinstance(identity, Equality):
             raise RefineError("{0} is not an identity".format(identity))
-        old, new = (
-            (identity.left, identity.right)
-            if rule_name == "=Elim1"
-            else (identity.right, identity.left)
-        )
         text = (inputs or {}).get("source", "")
         if str(text).strip():
             source = _formula(inputs, "source", "the sentence to rewrite")
         else:
-            source = _replace_all(target, new, old)
+            source = _unrewritten(target, identity)
         return Refinement(
             (Subgoal(identity), Subgoal(source)),
             (Binding("conclusion", target),),

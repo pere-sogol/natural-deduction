@@ -144,9 +144,9 @@ def _self_identity(b: Builder) -> Node:
 
 def _leibniz(b: Builder) -> Node:
     identity = b.assume(parse("a=b"))
-    once = b.step("=Elim1", [identity, b.assume(parse("Raa"))],
+    once = b.step("=Elim", [identity, b.assume(parse("Raa"))],
                   conclusion=parse("Rba"))
-    return b.step("=Elim1", [b.assume(parse("a=b")), once], conclusion=parse("Rbb"))
+    return b.step("=Elim", [b.assume(parse("a=b")), once], conclusion=parse("Rbb"))
 
 
 def _modus_tollens(b: Builder) -> Node:

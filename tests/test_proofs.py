@@ -192,7 +192,7 @@ class TestRegistry(ProofTestCase):
     """What a user interface builds its palette from."""
 
     def test_every_rule_is_registered_under_both_spellings(self):
-        self.assertEqual(len(rule_catalogue()), 18)
+        self.assertEqual(len(rule_catalogue()), 17)
         for cls in rule_catalogue():
             self.assertIs(rule(cls.name), cls)
             self.assertIs(rule(cls.__name__), cls)

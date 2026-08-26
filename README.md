@@ -27,7 +27,7 @@ saying which. Proofs draw themselves the way the book does.
 
 ## Status
 
-The language, the parser, all 18 rules and the renderer are written and tested,
+The language, the parser, all 17 rules and the renderer are written and tested,
 and there is a browser sandbox built on top of them — see **The sandbox** below.
 There is still no proof *search*: the sandbox works out everything a block's own
 shape settles, and tells you why a step will not go, but it will not find the
@@ -199,23 +199,24 @@ ExistsIntro(raa, parse("Ex Rxb"))    # MismatchError
 | ↔ | `IffIntro` | `IffElim` |
 | ∀ | `ForallIntro` | `ForallElim` |
 | ∃ | `ExistsIntro` | `ExistsElim` |
-| = | `EqualityIntro` | `EqualityElim1`, `EqualityElim2` |
+| = | `EqualityIntro` | `EqualityElim` |
 
 Constructor arguments follow the numbering of the subproofs in
 `reference/NDrules.pdf`, so each rule reads off its diagram there. Two are
 worth flagging: `IffIntro(π₁, π₂)` takes the proof of the *right* half first,
 and `OrElim(π₁, π₂, π₃)` takes the disjunction last.
 
-`AndElim`, `OrIntro` and `IffElim` are each one rule where the reference has
-two. The first two are told what they conclude — `AndElim(π, parse("Q"))`,
-`OrIntro(π, parse("P | Q"))` — and `IffElim` reads its direction off the half it
-is given, so it needs nothing. See the note on the reference below.
+`AndElim`, `OrIntro`, `IffElim` and `EqualityElim` are each one rule where the
+reference has two. Three of them are told what they conclude —
+`AndElim(π, parse("Q"))`, `OrIntro(π, parse("P | Q"))` — and `IffElim` reads its
+direction off the half it is given, so it needs nothing. See the note on the
+reference below.
 
 Rules can also be reached by name, which is how a user interface would enumerate
 them without importing every class:
 
 ```python
-rule_catalogue()                                   # all 18 classes
+rule_catalogue()                                   # all 17 classes
 apply("∧Intro", [Assumption(p), Assumption(parse("Q"))])   # build one
 can_apply("∧Elim", [Assumption(p)], conclusion=p)  # the error, without raising
 rule("∃Intro").parameters                          # what else it needs
@@ -238,7 +239,7 @@ discharge numbering, which the browser reuses even though it sets its own type.
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests -t .          # 403 tests
+python3 -m unittest discover -s tests -t .          # 405 tests
 python3 -m unittest tests.test_rules                # one module
 python3 demo.py                                     # a printable tour
 ```
@@ -258,16 +259,17 @@ subproof to be the bare assumption `Fa`, and every stated condition holds
 vacuously. *The Logic Manual* states the proviso with the conclusion included,
 and that is what is enforced here.
 
-Three of its rules are stated as numbered pairs and are single rules here:
-(∧Elim1)/(∧Elim2), (∨Intro1)/(∨Intro2) and (↔Elim1)/(↔Elim2). In each case the
-two halves differ in nothing a proof records — the same premises, the same node,
-the same label on the bar — so a finished proof could never tell you which was
-used, and keeping them apart only meant choosing a side before there was a
-formula to choose about.
+Four of its rules are stated as numbered pairs and are single rules here:
+(∧Elim1)/(∧Elim2), (∨Intro1)/(∨Intro2), (↔Elim1)/(↔Elim2) and
+(=Elim1)/(=Elim2). In each case the two halves differ in nothing a proof
+records — the same premises, the same node, the same label on the bar — so a
+finished proof could never tell you which was used, and keeping them apart only
+meant choosing a side before there was a formula to choose about.
 
-`AndElim` and `OrIntro` are told the sentence they conclude and check it against
-the premise; `IffElim` needs nothing at all, since the half you put above it
-decides which way it runs. Each proves exactly what its pair proved.
+`AndElim`, `OrIntro` and `EqualityElim` are told the sentence they conclude and
+check it against the premise; `IffElim` needs nothing at all, since the half you
+put above it decides which way it runs. Each proves exactly what its pair
+proved.
 
 ## The sandbox
 
@@ -338,7 +340,7 @@ is thrown away and the numbers kept.
 nd/formula.py    terms and formulae; substitution, generalisation, α-equivalence
 nd/parser.py     reading the book's notation from strings
 nd/proofs.py     the proof tree, the errors, the rule registry
-nd/rules.py      the 18 rules and their provisos
+nd/rules.py      the 17 rules and their provisos
 nd/render.py     placement and drawing
 
 ndweb/           the sandbox's model: slots, both directions of every rule,

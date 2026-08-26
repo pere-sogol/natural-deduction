@@ -39,8 +39,8 @@ SUMMARIES = {
     "∀Elim": "From ∀v φ, conclude φ with any constant put for v.",
     "∃Intro": "From φ with c in it, conclude ∃v φ.",
     "∃Elim": "From ∃v φ, and χ proved from a fresh instance of φ, conclude χ.",
-    "=Elim1": "From c₁ = c₂ and a sentence, replace occurrences of c₁ by c₂.",
-    "=Elim2": "From c₁ = c₂ and a sentence, replace occurrences of c₂ by c₁.",
+    "=Elim": "From c₁ = c₂ and a sentence, replace occurrences of either "
+             "constant by the other.",
 }
 
 #: Each rule's own figure: the premises above the bar, what it concludes,
@@ -67,8 +67,7 @@ SCHEMA = {
     "∀Elim": (("∀v φ(v)",), "φ(c)", ()),
     "∃Intro": (("φ(c)",), "∃v φ(v)", ()),
     "∃Elim": (("∃v φ(v)", "χ"), "χ", (None, "φ(c)")),
-    "=Elim1": (("c = d", "φ(c)"), "φ(d)", ()),
-    "=Elim2": (("c = d", "φ(d)"), "φ(c)", ()),
+    "=Elim": (("c = d", "φ(c)"), "φ(d)", ()),
 }
 
 #: The provisos worth warning about before a student runs into them.
@@ -83,8 +82,8 @@ CAVEATS = {
              "and from every other assumption still open.",
     "∃Intro": "Replaces some occurrences, not necessarily all: Raa gives ∃x Rxa "
               "as well as ∃x Rxx.",
-    "=Elim1": "Replaces some occurrences, not necessarily all.",
-    "=Elim2": "Replaces some occurrences, not necessarily all.",
+    "=Elim": "Replaces some occurrences, not necessarily all, and runs in "
+             "whichever direction the sentence you write calls for.",
 }
 
 _CONNECTIVES = ("∧", "∨", "→", "↔", "¬", "∀", "∃", "=")

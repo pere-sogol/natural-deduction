@@ -36,8 +36,7 @@ CASES = {
     "∀Elim": ("Fa", {"universal": "Ax Fx"}),
     "∃Intro": ("Ex Fx", {"constant": "a"}),
     "∃Elim": ("P", {"existential": "Ex Fx", "constant": "a"}),
-    "=Elim1": ("Rbb", {"identity": "a=b"}),
-    "=Elim2": ("Raa", {"identity": "a=b"}),
+    "=Elim": ("Rbb", {"identity": "a=b"}),
 }
 
 #: Subgoals some rules cannot have closed by a bare assumption.  ``AIntro``
@@ -178,25 +177,24 @@ class TestUniversalElimination(RefineTestCase):
 
 
 class TestIdentityElimination(RefineTestCase):
-    def test_the_source_defaults_to_undoing_the_replacement(self):
-        refinement = refine("=Elim1", parse("Rbb"), Context(),
-                            {"identity": "a=b"})
-        self.assertEqual(
-            [str(s.target) for s in refinement.subgoals], ["a=b", "Raa"]
-        )
+    def sources(self, goal, **inputs):
+        inputs.setdefault("identity", "a=b")
+        refinement = refine("=Elim", parse(goal), Context(), inputs)
+        return [str(subgoal.target) for subgoal in refinement.subgoals]
 
-    def test_the_other_direction_defaults_the_other_way(self):
-        refinement = refine("=Elim2", parse("Raa"), Context(),
-                            {"identity": "a=b"})
-        self.assertEqual(
-            [str(s.target) for s in refinement.subgoals], ["a=b", "Rbb"]
-        )
+    def test_the_source_defaults_to_undoing_the_replacement(self):
+        self.assertEqual(self.sources("Rbb"), ["a=b", "Raa"])
+
+    def test_the_default_is_whichever_direction_actually_rewrites(self):
+        """One rule reads the identity both ways; undoing Rbb gives nothing."""
+        self.assertEqual(self.sources("Raa"), ["a=b", "Rbb"])
+
+    def test_a_goal_holding_both_constants_offers_the_first_direction(self):
+        self.assertEqual(self.sources("Rab"), ["a=b", "Raa"])
 
     def test_a_source_may_be_given_instead(self):
         """Replacement is of some occurrences, so the default is only one."""
-        refinement = refine("=Elim1", parse("Rbb"), Context(),
-                            {"identity": "a=b", "source": "Rab"})
-        self.assertEqual(refinement.subgoals[1].target, parse("Rab"))
+        self.assertEqual(self.sources("Rbb", source="Rab")[1], "Rab")
 
 
 class TestSuggestions(RefineTestCase):
@@ -250,7 +248,7 @@ class TestMissingInput(RefineTestCase):
 class TestProbe(RefineTestCase):
     def test_it_reports_every_rule_with_a_reason_when_unavailable(self):
         found = dict((p.rule, p) for p in probe(parse("P & Q"), Context()))
-        self.assertEqual(len(found), 18)
+        self.assertEqual(len(found), 17)
         self.assertTrue(found["∧Intro"].available)
         self.assertFalse(found["∨Intro"].available)
         self.assertIn("disjunction", found["∨Intro"].reason)

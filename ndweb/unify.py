@@ -64,8 +64,7 @@ FROM_PREMISE = {
     "↔Elim": {"biconditional": 0},
     "∀Elim": {"universal": 0},
     "∃Elim": {"existential": 0},
-    "=Elim1": {"identity": 0, "source": 1},
-    "=Elim2": {"identity": 0, "source": 1},
+    "=Elim": {"identity": 0, "source": 1},
 }
 
 #: The premise that settles an elimination on its own.  ``→Elim`` given

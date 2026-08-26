@@ -14,8 +14,7 @@ from nd.rules import (
     AndElim,
     AndIntro,
     Assumption,
-    EqualityElim1,
-    EqualityElim2,
+    EqualityElim,
     EqualityIntro,
     ExistsElim,
     ExistsIntro,
@@ -431,25 +430,35 @@ class TestIdentity(RuleTestCase):
         for target in ("Rab", "Rba", "Rbb", "Raa"):
             with self.subTest(target=target):
                 self.assertEqual(
-                    EqualityElim1(identity, premise, parse(target)).conclusion,
+                    EqualityElim(identity, premise, parse(target)).conclusion,
                     parse(target),
                 )
 
     def test_elim_runs_in_the_other_direction_too(self):
+        """One rule, not two: the conclusion says which way it was read."""
         identity = Assumption(parse("a=b"))
         premise = Assumption(parse("Rbb"))
+        for target in ("Rab", "Rba", "Raa", "Rbb"):
+            with self.subTest(target=target):
+                self.assertEqual(
+                    EqualityElim(identity, premise, parse(target)).conclusion,
+                    parse(target),
+                )
+
+    def test_elim_reads_either_direction_off_the_same_two_subproofs(self):
+        """a=b over Rab reaches Raa by one reading and Rbb by the other."""
+        identity, premise = Assumption(parse("a=b")), Assumption(parse("Rab"))
         self.assertEqual(
-            EqualityElim2(identity, premise, parse("Rab")).conclusion, parse("Rab")
+            EqualityElim(identity, premise, parse("Rbb")).conclusion, parse("Rbb")
         )
-        self.assertRefuses(
-            MismatchError, "is not",
-            EqualityElim1, identity, premise, parse("Rab"),
+        self.assertEqual(
+            EqualityElim(identity, premise, parse("Raa")).conclusion, parse("Raa")
         )
 
     def test_elim_refuses_an_unrelated_conclusion(self):
         self.assertRefuses(
-            MismatchError, "occurrences of a replaced by b",
-            EqualityElim1,
+            MismatchError, "occurrences of a replaced by b, or of b by a",
+            EqualityElim,
             Assumption(parse("a=b")),
             Assumption(parse("Raa")),
             parse("Rac"),
@@ -458,7 +467,7 @@ class TestIdentity(RuleTestCase):
     def test_elim_needs_an_identity(self):
         self.assertRefuses(
             ShapeError, "must conclude with an identity",
-            EqualityElim1,
+            EqualityElim,
             Assumption(parse("P")),
             Assumption(parse("Q")),
             parse("Q"),
@@ -466,7 +475,7 @@ class TestIdentity(RuleTestCase):
 
     def test_identity_is_symmetric(self):
         # a=b |- b=a, by replacing the first a in a=a.
-        proof = EqualityElim1(
+        proof = EqualityElim(
             Assumption(parse("a=b")), EqualityIntro(self.a), parse("b=a")
         )
         self.assertEqual(proof.conclusion, parse("b=a"))
@@ -476,7 +485,7 @@ class TestIdentity(RuleTestCase):
         identity = Assumption(parse("a=b"))
         premise = Assumption(parse("Fa & Ax(Gx -> Rxa)"))
         self.assertEqual(
-            EqualityElim1(
+            EqualityElim(
                 identity, premise, parse("Fb & Ax(Gx -> Rxa)")
             ).conclusion,
             parse("Fb & Ax(Gx -> Rxa)"),
