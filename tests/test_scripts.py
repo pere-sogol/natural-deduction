@@ -47,9 +47,9 @@ BACKWARD_SCRIPTS = {
     ],
     "excluded-middle": [
         {"at": "P ∨ ¬P", "rule": "¬Elim", "premises": {0: "P | ~P"}},
-        {"at": "P ∨ ¬P", "rule": "∨Intro2"},
+        {"at": "P ∨ ¬P", "rule": "∨Intro", "premises": {0: "~P"}},
         {"at": "¬P", "rule": "¬Intro", "premises": {0: "P | ~P"}},
-        {"at": "P ∨ ¬P", "rule": "∨Intro1"},
+        {"at": "P ∨ ¬P", "rule": "∨Intro", "premises": {0: "P"}},
         {"at": "P", "rule": "Assumption"},
         {"at": "¬(P ∨ ¬P)", "rule": "Assumption"},
         {"at": "¬(P ∨ ¬P)", "rule": "Assumption"},

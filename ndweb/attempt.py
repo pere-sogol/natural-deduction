@@ -39,13 +39,20 @@ from nd.proofs import (
     SentenceError,
     ShapeError,
     apply,
+    rule,
 )
 
-__all__ = ["RuleFailure", "Attempt", "attempt", "BUG_KINDS"]
+__all__ = ["RuleFailure", "Attempt", "attempt", "BUG_KINDS", "UNFINISHED"]
 
 #: Kinds that mean the editor passed something wrong, not that the rule
 #: failed to apply.  Shown differently, because the student cannot fix them.
 BUG_KINDS = frozenset({"argument", "unknown-rule", "internal"})
+
+#: Kinds that mean the step is not finished, rather than wrong.  A block
+#: with an empty slot in it is the ordinary state of a proof being built,
+#: and drawing it as a refusal would make the sheet look like a list of
+#: mistakes for as long as it took to fill in.
+UNFINISHED = frozenset({"blocked", "incomplete"})
 
 
 @dataclass(frozen=True)
@@ -133,12 +140,49 @@ def _alpha_hint(subproofs: Sequence[Proof], parameters: Tuple[Formula, ...]) -> 
     return ""
 
 
+def _unfilled(rule_name: str, parameters: dict) -> List[str]:
+    """Required parameters this call has not been given a value for."""
+    try:
+        declared = rule(rule_name).parameters
+    except KeyError:
+        return []
+    return [
+        p.name for p in declared
+        if p.required and parameters.get(p.name) is None
+    ]
+
+
+def _listing(names: Sequence[str]) -> str:
+    listed = ", ".join("the " + name for name in names[:-1])
+    if not listed:
+        return "the " + names[0]
+    return "{0} and the {1}".format(listed, names[-1])
+
+
 def attempt(rule_name: str, subproofs: Sequence[Proof] = (), **parameters) -> Attempt:
     """Build a proof, or say why not.
 
     The signature is :func:`nd.proofs.apply`'s, so a caller that already
     knows how to drive the engine needs no translation.
+
+    A rule called without one of its required parameters is asked for it
+    rather than applied.  Python would raise ``TypeError`` naming a
+    positional argument, which arrives here as an editor bug and reads
+    like one -- but an empty slot is not a bug, it is a slot, and the
+    student is the one who can fill it.
     """
+    missing = _unfilled(rule_name, parameters)
+    if missing:
+        return Attempt(
+            failure=RuleFailure(
+                "incomplete",
+                "{0} {1} still empty".format(
+                    _listing(missing), "is" if len(missing) == 1 else "are"),
+                "{0} was applied without {1}".format(
+                    rule_name, _listing(missing)),
+                rule_name,
+            )
+        )
     try:
         return Attempt(proof=apply(rule_name, subproofs, **parameters))
     except ProofError as error:

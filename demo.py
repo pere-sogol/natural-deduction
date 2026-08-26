@@ -31,8 +31,7 @@ from nd import (
     NotElim,
     NotIntro,
     Or,
-    OrIntro1,
-    OrIntro2,
+    OrIntro,
     ParseError,
     ProofError,
     Variable,
@@ -125,8 +124,9 @@ def deduction() -> None:
     reset_arities()
     excluded = parse("P | ~P")
     denial = Assumption(parse("~(P | ~P)"))
-    not_p = NotIntro(OrIntro1(Assumption(parse("P")), parse("~P")), denial, parse("P"))
-    _show("Excluded middle:", NotElim(OrIntro2(not_p, parse("P")), denial, excluded))
+    not_p = NotIntro(
+        OrIntro(Assumption(parse("P")), excluded), denial, parse("P"))
+    _show("Excluded middle:", NotElim(OrIntro(not_p, excluded), denial, excluded))
 
     # The quantifier rules run through constants, so every line is a
     # sentence and the parameter has to be arbitrary at the point of use.
@@ -170,7 +170,8 @@ def deduction() -> None:
     print("\ncan_apply, for offering rules rather than applying them:")
     print("  ∧Intro:", can_apply(
         "∧Intro", [Assumption(parse("P")), Assumption(parse("Q"))]) or "available")
-    print("  ∧Elim1:", can_apply("∧Elim1", [Assumption(parse("P"))]))
+    print("  ∧Elim: ", can_apply(
+        "∧Elim", [Assumption(parse("P"))], conclusion=parse("P")))
 
 
 def main() -> None:

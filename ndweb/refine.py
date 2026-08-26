@@ -131,19 +131,18 @@ class Probe:
 #: How much the target settles, per rule.  Drives the palette's grouping.
 BACKWARD = {
     "Assumption": "determined", "=Intro": "determined",
-    "∧Intro": "determined", "∨Intro1": "determined", "∨Intro2": "determined",
+    "∧Intro": "determined", "∨Intro": "formula",
     "→Intro": "determined", "↔Intro": "determined",
-    "∧Elim1": "formula", "∧Elim2": "formula", "→Elim": "formula",
+    "∧Elim": "formula", "→Elim": "formula",
     "∨Elim": "formula", "¬Intro": "formula", "¬Elim": "formula",
-    "↔Elim1": "formula", "↔Elim2": "formula", "∀Elim": "formula",
-    "∃Elim": "formula", "=Elim1": "formula", "=Elim2": "formula",
+    "↔Elim": "formula", "∀Elim": "formula",
+    "∃Elim": "formula", "=Elim": "formula",
     "∀Intro": "constant", "∃Intro": "constant",
 }
 
 _SHAPES = {
     "∧Intro": (And, "a conjunction"),
-    "∨Intro1": (Or, "a disjunction"),
-    "∨Intro2": (Or, "a disjunction"),
+    "∨Intro": (Or, "a disjunction"),
     "→Intro": (Implies, "a conditional"),
     "↔Intro": (Iff, "a biconditional"),
     "¬Intro": (Not, "a negation"),
@@ -215,6 +214,24 @@ def _shaped_suggestions(context: Context, kind, pick) -> Tuple[str, ...]:
     return tuple(found)
 
 
+def _unrewritten(target: Formula, identity: Equality) -> Formula:
+    """What ``=Elim`` would have rewritten to reach ``target``.
+
+    One rule reading an identity both ways leaves two candidates, and the
+    useful one is whichever actually changes something: reaching ``Rbb``
+    through ``a=b`` means starting from ``Raa``, and undoing the other
+    direction would propose ``Rbb`` itself, which rewrites to nothing.
+    When both directions bite -- a goal holding both constants -- the
+    first is offered and the student can write the source instead.
+    """
+    left, right = identity.left, identity.right
+    for candidate in (_replace_all(target, right, left),
+                      _replace_all(target, left, right)):
+        if candidate != target:
+            return candidate
+    return target
+
+
 def _replace_all(formula: Formula, old: Constant, new: Constant) -> Formula:
     """``formula`` with every ``old`` turned into ``new``.
 
@@ -240,13 +257,12 @@ def fields(rule_name: str, target: Formula, context: Optional[Context] = None):
     if kind == "determined":
         return ()
 
-    if rule_name in ("∧Elim1", "∧Elim2"):
-        side = "right" if rule_name == "∧Elim1" else "left"
-        return (Field(side, "formula",
-                      "the other conjunct, which will be discarded",
-                      _shaped_suggestions(context, And,
-                                          lambda f: f.right if rule_name == "∧Elim1"
-                                          else f.left)),)
+    if rule_name == "∧Elim":
+        return (Field("conjunction", "formula",
+                      "the conjunction to take {0} out of".format(target),
+                      _shaped_suggestions(
+                          context, And,
+                          lambda f: f if target in (f.left, f.right) else None)),)
 
     if rule_name == "→Elim":
         return (Field("antecedent", "formula",
@@ -265,17 +281,24 @@ def fields(rule_name: str, target: Formula, context: Optional[Context] = None):
                       "a sentence psi you can derive along with its negation",
                       tuple(str(f) for f in sorted(context.available, key=str))[:6]),)
 
-    if rule_name == "↔Elim1":
-        return (Field("other", "formula", "the left half of the biconditional",
+    if rule_name == "↔Elim":
+        return (Field("biconditional", "formula",
+                      "the biconditional with {0} as one of its halves".format(
+                          target),
                       _shaped_suggestions(
                           context, Iff,
-                          lambda f: f.left if f.right == target else None)),)
+                          lambda f: f if target in (f.left, f.right) else None)),)
 
-    if rule_name == "↔Elim2":
-        return (Field("other", "formula", "the right half of the biconditional",
-                      _shaped_suggestions(
-                          context, Iff,
-                          lambda f: f.right if f.left == target else None)),)
+    if rule_name == "∨Intro":
+        # Which half will be proved is the student's to say, but if just one
+        # of them is already in scope, saying it back is not a guess.
+        halves = (target.left, target.right)
+        inside = [half for half in halves if half in context.available]
+        return (Field("disjunct", "formula",
+                      "the half of {0} you will prove".format(target),
+                      tuple(str(half) for half in inside)
+                      + tuple(str(half) for half in halves if half not in inside),
+                      str(inside[0]) if len(inside) == 1 else ""),)
 
     if rule_name == "∀Elim":
         return (Field("universal", "formula",
@@ -293,7 +316,7 @@ def fields(rule_name: str, target: Formula, context: Optional[Context] = None):
                   default=str(fresh_constant(avoid))),
         )
 
-    if rule_name in ("=Elim1", "=Elim2"):
+    if rule_name == "=Elim":
         return (
             Field("identity", "formula", "the identity to apply",
                   _shaped_suggestions(context, Equality, lambda f: f)),
@@ -348,13 +371,14 @@ def refine(
     if rule_name == "∧Intro":
         return Refinement((Subgoal(target.left), Subgoal(target.right)))
 
-    if rule_name == "∨Intro1":
-        return Refinement((Subgoal(target.left),),
-                          (Binding("right", target.right),))
-
-    if rule_name == "∨Intro2":
-        return Refinement((Subgoal(target.right),),
-                          (Binding("left", target.left),))
+    if rule_name == "∨Intro":
+        disjunct = _formula(inputs, "disjunct", "the half you will prove")
+        if disjunct not in (target.left, target.right):
+            raise RefineError(
+                "{0} is neither half of {1}, so proving it would not give the "
+                "goal".format(disjunct, target)
+            )
+        return Refinement((Subgoal(disjunct),), (Binding("conclusion", target),))
 
     if rule_name == "→Intro":
         return Refinement(
@@ -369,11 +393,19 @@ def refine(
             Subgoal(target.left, frozenset({target.right})),
         ))
 
-    if rule_name in ("∧Elim1", "∧Elim2"):
-        side = "right" if rule_name == "∧Elim1" else "left"
-        other = _formula(inputs, side, "the conjunct to be discarded")
-        conjunction = And(target, other) if side == "right" else And(other, target)
-        return Refinement((Subgoal(conjunction),))
+    if rule_name == "∧Elim":
+        conjunction = _formula(inputs, "conjunction", "the conjunction to break up")
+        if not isinstance(conjunction, And):
+            raise RefineError(
+                "{0} is not a conjunction, so there is nothing to take out of it"
+                .format(conjunction)
+            )
+        if target not in (conjunction.left, conjunction.right):
+            raise RefineError(
+                "{0} is neither conjunct of {1}, so this rule cannot reach it"
+                .format(target, conjunction)
+            )
+        return Refinement((Subgoal(conjunction),), (Binding("conclusion", target),))
 
     if rule_name == "→Elim":
         antecedent = _formula(inputs, "antecedent", "the sentence psi")
@@ -411,11 +443,22 @@ def refine(
             (Binding("conclusion", target),),
         )
 
-    if rule_name in ("↔Elim1", "↔Elim2"):
-        other = _formula(inputs, "other", "the other half of the biconditional")
-        biconditional = (
-            Iff(other, target) if rule_name == "↔Elim1" else Iff(target, other)
-        )
+    if rule_name == "↔Elim":
+        biconditional = _formula(inputs, "biconditional", "the biconditional")
+        if not isinstance(biconditional, Iff):
+            raise RefineError(
+                "{0} is not a biconditional, so there are no halves to swap"
+                .format(biconditional)
+            )
+        if target == biconditional.left:
+            other = biconditional.right
+        elif target == biconditional.right:
+            other = biconditional.left
+        else:
+            raise RefineError(
+                "{0} is neither half of {1}, so this rule cannot reach it"
+                .format(target, biconditional)
+            )
         return Refinement((Subgoal(biconditional), Subgoal(other)))
 
     if rule_name == "∀Intro":
@@ -497,20 +540,15 @@ def refine(
             warnings,
         )
 
-    if rule_name in ("=Elim1", "=Elim2"):
+    if rule_name == "=Elim":
         identity = _formula(inputs, "identity", "an identity c1 = c2")
         if not isinstance(identity, Equality):
             raise RefineError("{0} is not an identity".format(identity))
-        old, new = (
-            (identity.left, identity.right)
-            if rule_name == "=Elim1"
-            else (identity.right, identity.left)
-        )
         text = (inputs or {}).get("source", "")
         if str(text).strip():
             source = _formula(inputs, "source", "the sentence to rewrite")
         else:
-            source = _replace_all(target, new, old)
+            source = _unrewritten(target, identity)
         return Refinement(
             (Subgoal(identity), Subgoal(source)),
             (Binding("conclusion", target),),

@@ -174,6 +174,13 @@ class TestTheNesting(unittest.TestCase):
         self.assertEqual(drawn["status"], "pending")
         self.assertEqual(drawn["message"], "")
 
+    def test_an_empty_parameter_is_pending_but_still_says_what_is_missing(self):
+        """Unlike a branch above, nothing that happens elsewhere will fill it."""
+        step = Step(0, "∧Elim", (Step(1, "Assumption", (), (), parse("P & Q")),))
+        drawn = typeset(step)
+        self.assertEqual(drawn["status"], "pending")
+        self.assertEqual(drawn["message"], "the conclusion is still empty")
+
     def test_a_card_carries_where_it_sits_and_what_it_proves(self):
         reset_arities()
         drawn = card(Card(solution("identity"), 30, 70))

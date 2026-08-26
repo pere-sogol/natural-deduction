@@ -137,7 +137,7 @@ class TestPuttingRulesDown(SessionTestCase):
         state = self.start()
         self.go(op="focus", node=saying(state, "P → P"))
         state = self.go(op="view")
-        self.assertEqual(len(state["palette"]), 21)
+        self.assertEqual(len(state["palette"]), 17)
         misfits = [r["name"] for r in state["palette"] if not r["fits"]]
         self.assertIn("∧Intro", misfits)
         self.assertNotIn("→Intro", misfits)

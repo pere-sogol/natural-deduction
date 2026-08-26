@@ -12,7 +12,7 @@ Roadmap, in order:
 
 1. `nd/formula.py` — terms and formulae **(done)**
 2. `nd/parser.py` — `parse("Ax(Fx -> Ey Rxy)")` **(done)**
-3. `nd/proofs.py` + `nd/rules.py` — the proof tree and the 21 rules **(done)**
+3. `nd/proofs.py` + `nd/rules.py` — the proof tree and the 17 rules **(done)**
 4. `nd/render.py` — drawing a proof as a tree **(done)**
 5. `ndweb/` + `web/` — the browser sandbox **(done)**
 
@@ -23,12 +23,13 @@ See "The editor layer" below.
 
 `reference/NDrules.pdf` (pp. 39–46) specifies the system precisely: the tree
 definitions, every rule, and its side conditions. Consult it before changing a
-rule, and note the one place we knowingly diverge from it.
+rule, and note the two kinds of place we knowingly diverge from it: the
+`∃Elim` proviso, and the four numbered pairs that are single rules here.
 
 ## Commands
 
 ```sh
-python3 -m unittest discover -s tests -t .              # whole suite (391)
+python3 -m unittest discover -s tests -t .              # whole suite (405)
 python3 -m unittest tests.test_rules.TestExistential     # one class
 python3 -m unittest tests.test_formula.TestCapture.test_capture_is_refused
 python3 demo.py                                         # printable smoke demo
@@ -177,21 +178,36 @@ because they replace *some* occurrences (see the note above). The caller passes
 the target and the rule checks it. `_replaces_some()` in `nd/rules.py` does the
 structural walk for `=Elim`, and belongs there rather than on `Formula`.
 
+**Four numbered pairs are single rules here.** The reference states (∧Elim1)/
+(∧Elim2), (∨Intro1)/(∨Intro2), (↔Elim1)/(↔Elim2) and (=Elim1)/(=Elim2)
+separately, but nothing a proof records distinguishes the halves of any pair:
+the same premises, the same node, the same label on the bar. Splitting them only
+forced the caller to pick a side before it had a formula in hand.
+
+`AndElim(π₁, conclusion)`, `OrIntro(π₁, conclusion)` and
+`EqualityElim(π₁, π₂, conclusion)` join the verify-don't-compute family above —
+a conjunction has two conjuncts, a disjunction may add anything at all, an
+identity reads both ways, and none of it is guessable — so the sentence wanted
+is named and checked. `IffElim(π₁, π₂)` needs no parameter at all: the half
+supplied by π₂ decides the direction, which is why merging it costs nothing.
+
+Two traps. `∧Elim` takes a conjunct *whole* and never reaches inside one: from
+`(P ∧ Q) ∧ S` it gives `P ∧ Q` or `S`, never `P`. And `↔Elim` can no longer
+appear in `unify.MAJOR` — `φ ↔ ψ` alone does not say which half it is about to
+be handed. `tests/test_rules.py` pins the first; the comment on `MAJOR` records
+the second.
+
 **The renderer is two stages.** `layout()` places sentences and bars on an
 integer grid and returns data; `to_text()` paints characters into it. A web
 front end reuses the first and replaces the second, so keep placement out of
 the painter. Discharge numbers are assigned post-order and only to steps that
 actually close a leaf, so a vacuous discharge leaves no dangling superscript.
 
-### Three gotchas
+### Two gotchas
 
 **`repr=False` on the connective and quantifier dataclasses is deliberate.**
 Without it `@dataclass` installs its own `__repr__`, clobbering the inherited
 one from `_Binary` / `Quantified`.
-
-**`EqualityElim1`/`2` inherit from `_EqualityElim` alone.** That base already
-subclasses `Proof`; writing `class EqualityElim1(Proof, _EqualityElim)` is an
-inconsistent MRO and fails at import.
 
 **Predicate arities live in module-level state.** `Atom.__init__` fixes a
 letter's arity on first use and raises `ArityError` on a later mismatch, so
@@ -258,7 +274,10 @@ table replaced the whole modal-dialogue flow.
 
 **`unify.MAJOR` is the other half of that.** An elimination given only its major
 premise already knows what it concludes and what its other premises must be, and
-saying so is most of what makes the sheet feel as though it is helping.
+saying so is most of what makes the sheet feel as though it is helping. Only
+`→Elim` qualifies now: an elimination that reads its direction off a *minor*
+premise — `↔Elim` does — cannot be in the table, because the major premise alone
+leaves the answer open.
 
 **Solved parameters are computed, never stored** — as contexts are, and for the
 same reason. A `→Intro` whose conclusion was written knows perfectly well what
@@ -268,9 +287,12 @@ them; nothing persists them.
 
 **`CONCLUSION_PARAM` stops one value being typed twice.** `∃Intro` is told the
 existential it claims, `¬Elim` the sentence it concludes, `=Elim` the rewritten
-sentence, `Assumption` what is assumed — and in every case that value is also
-the line under the bar. `kwargs()` fills the parameter from `claim`, and
-`parameters()` hides it from the block.
+sentence, `∧Elim` which conjunct it takes, `∨Intro` the disjunction it claims,
+`Assumption` what is assumed — and in every case that value is also the line
+under the bar. `kwargs()` fills the parameter from `claim`, and `parameters()`
+hides it from the block. That is what lets `∧Elim` and `∨Intro` be single rules
+without adding a chip: on the sheet you say which conjunct, or which
+disjunction, by writing it — which you would have written anyway.
 
 **Contexts are computed, never stored.** What may be assumed at a slot depends
 on every discharging step above it, so a field on `Goal` would go stale the

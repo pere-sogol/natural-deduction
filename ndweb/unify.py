@@ -38,7 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, List, Optional, Tuple
 
-from nd.formula import Formula, Iff, Implies, Variable
+from nd.formula import Formula, Implies, Variable
 from nd.proofs import rule
 
 from ndweb.attempt import RuleFailure, attempt
@@ -55,16 +55,16 @@ __all__ = ["Solved", "solve", "predict"]
 #: ``ndweb.refine.fields`` uses, giving the index of the premise that
 #: answers it.
 FROM_PREMISE = {
+    "∧Elim": {"conjunction": 0},
+    "∨Intro": {"disjunct": 0},
     "→Elim": {"antecedent": 0},
     "∨Elim": {"disjunction": 2},
     "¬Intro": {"witness": 0},
     "¬Elim": {"witness": 0},
-    "↔Elim1": {"other": 1},
-    "↔Elim2": {"other": 1},
+    "↔Elim": {"biconditional": 0},
     "∀Elim": {"universal": 0},
     "∃Elim": {"existential": 0},
-    "=Elim1": {"identity": 0, "source": 1},
-    "=Elim2": {"identity": 0, "source": 1},
+    "=Elim": {"identity": 0, "source": 1},
 }
 
 #: The premise that settles an elimination on its own.  ``→Elim`` given
@@ -73,10 +73,14 @@ FROM_PREMISE = {
 #: feel as though it is helping.  Each entry is the index of that premise,
 #: the shape it must have, and what the rest of the block then is: the
 #: conclusion, and the other premises by index.
+#:
+#: ``↔Elim`` used to be here twice and cannot be here at all: one rule taking
+#: either half of the biconditional does not know, from ``φ ↔ ψ`` alone, which
+#: half it is being given.  Write either the other premise or the conclusion
+#: and the block still completes itself -- through ``predict`` one way and
+#: ``refine`` the other -- it just has nothing to say before then.
 MAJOR = {
     "→Elim": (1, Implies, lambda f: (f.right, {0: f.left})),
-    "↔Elim1": (0, Iff, lambda f: (f.right, {1: f.left})),
-    "↔Elim2": (0, Iff, lambda f: (f.left, {1: f.right})),
 }
 
 #: Premises that simply repeat the conclusion, whatever else is unknown.

@@ -11,27 +11,23 @@ from nd.formula import Constant, Variable, reset_arities
 from nd.parser import parse
 from nd.proofs import MismatchError, ProvisoError, ShapeError
 from nd.rules import (
-    AndElim1,
-    AndElim2,
+    AndElim,
     AndIntro,
     Assumption,
-    EqualityElim1,
-    EqualityElim2,
+    EqualityElim,
     EqualityIntro,
     ExistsElim,
     ExistsIntro,
     ForallElim,
     ForallIntro,
-    IffElim1,
-    IffElim2,
+    IffElim,
     IffIntro,
     ImpliesElim,
     ImpliesIntro,
     NotElim,
     NotIntro,
     OrElim,
-    OrIntro1,
-    OrIntro2,
+    OrIntro,
     _replaces_some,
 )
 
@@ -54,26 +50,57 @@ class TestConjunction(RuleTestCase):
         proof = AndIntro(Assumption(parse("P")), Assumption(parse("Q")))
         self.assertEqual(proof.conclusion, parse("P & Q"))
 
-    def test_elim(self):
+    def test_elim_takes_either_conjunct(self):
+        """One rule, not two: the conjunct wanted is named, not chosen up front."""
         conjunction = Assumption(parse("P & Q"))
-        self.assertEqual(AndElim1(conjunction).conclusion, parse("P"))
-        self.assertEqual(AndElim2(conjunction).conclusion, parse("Q"))
+        self.assertEqual(AndElim(conjunction, parse("P")).conclusion, parse("P"))
+        self.assertEqual(AndElim(conjunction, parse("Q")).conclusion, parse("Q"))
+
+    def test_elim_refuses_a_conclusion_that_is_neither_conjunct(self):
+        self.assertRefuses(
+            MismatchError, "neither conjunct",
+            AndElim, Assumption(parse("P & Q")), parse("S"),
+        )
+
+    def test_elim_takes_a_conjunct_whole_rather_than_reaching_inside_it(self):
+        """From (P ^ Q) ^ S only P ^ Q and S are reachable, not P."""
+        conjunction = Assumption(parse("(P & Q) & S"))
+        self.assertEqual(
+            AndElim(conjunction, parse("P & Q")).conclusion, parse("P & Q")
+        )
+        self.assertRefuses(
+            MismatchError, "neither conjunct",
+            AndElim, conjunction, parse("P"),
+        )
 
     def test_elim_needs_a_conjunction(self):
         self.assertRefuses(
             ShapeError, "must conclude with a conjunction",
-            AndElim1, Assumption(parse("P | Q")),
+            AndElim, Assumption(parse("P | Q")), parse("P"),
         )
 
 
 class TestDisjunction(RuleTestCase):
-    def test_intro_adds_the_disjunct_it_is_given(self):
+    def test_intro_adds_a_disjunct_on_either_side(self):
+        """One rule, not two: the whole disjunction says which side."""
         proof = Assumption(parse("P"))
         self.assertEqual(
-            OrIntro1(proof, parse("Q")).conclusion, parse("P | Q")
+            OrIntro(proof, parse("P | Q")).conclusion, parse("P | Q")
         )
         self.assertEqual(
-            OrIntro2(proof, parse("Q")).conclusion, parse("Q | P")
+            OrIntro(proof, parse("Q | P")).conclusion, parse("Q | P")
+        )
+
+    def test_intro_refuses_a_disjunction_the_premise_is_no_part_of(self):
+        self.assertRefuses(
+            MismatchError, "neither disjunct",
+            OrIntro, Assumption(parse("P")), parse("Q | S"),
+        )
+
+    def test_intro_needs_a_disjunction_to_claim(self):
+        self.assertRefuses(
+            ShapeError, "must be a disjunction",
+            OrIntro, Assumption(parse("P")), parse("P & Q"),
         )
 
     def test_elim(self):
@@ -171,9 +198,9 @@ class TestNegation(RuleTestCase):
     def test_excluded_middle_is_a_theorem(self):
         excluded = parse("P | ~P")
         denial = Assumption(parse("~(P | ~P)"))
-        left = OrIntro1(Assumption(parse("P")), parse("~P"))
+        left = OrIntro(Assumption(parse("P")), excluded)
         not_p = NotIntro(left, denial, parse("P"))
-        right = OrIntro2(not_p, parse("P"))
+        right = OrIntro(not_p, excluded)
         proof = NotElim(right, denial, excluded)
         self.assertEqual(proof.conclusion, excluded)
         self.assertTrue(proof.is_theorem())
@@ -205,30 +232,31 @@ class TestBiconditional(RuleTestCase):
         self.assertEqual(proof.conclusion, parse("P <-> P"))
         self.assertTrue(proof.is_theorem())
 
-    def test_elim(self):
+    def test_elim_runs_whichever_way_the_half_it_is_given_points(self):
+        """One rule, not two, and it needs no parameter to tell them apart."""
         biconditional = Assumption(parse("P <-> Q"))
         self.assertEqual(
-            IffElim1(biconditional, Assumption(parse("P"))).conclusion, parse("Q")
+            IffElim(biconditional, Assumption(parse("P"))).conclusion, parse("Q")
         )
         self.assertEqual(
-            IffElim2(biconditional, Assumption(parse("Q"))).conclusion, parse("P")
+            IffElim(biconditional, Assumption(parse("Q"))).conclusion, parse("P")
         )
 
-    def test_elim_needs_the_right_half(self):
-        biconditional = Assumption(parse("P <-> Q"))
+    def test_elim_needs_one_half_or_the_other(self):
         self.assertRefuses(
-            MismatchError, "the left half of",
-            IffElim1, biconditional, Assumption(parse("Q")),
+            MismatchError, "neither half",
+            IffElim, Assumption(parse("P <-> Q")), Assumption(parse("S")),
         )
-        self.assertRefuses(
-            MismatchError, "the right half of",
-            IffElim2, biconditional, Assumption(parse("P")),
-        )
+
+    def test_elim_of_a_biconditional_of_one_sentence_with_itself(self):
+        """P <-> P points both ways at once, and either reading gives P."""
+        proof = IffElim(Assumption(parse("P <-> P")), Assumption(parse("P")))
+        self.assertEqual(proof.conclusion, parse("P"))
 
     def test_elim_needs_a_biconditional(self):
         self.assertRefuses(
             ShapeError, "must conclude with a biconditional",
-            IffElim1, Assumption(parse("P -> Q")), Assumption(parse("P")),
+            IffElim, Assumption(parse("P -> Q")), Assumption(parse("P")),
         )
 
 
@@ -402,25 +430,35 @@ class TestIdentity(RuleTestCase):
         for target in ("Rab", "Rba", "Rbb", "Raa"):
             with self.subTest(target=target):
                 self.assertEqual(
-                    EqualityElim1(identity, premise, parse(target)).conclusion,
+                    EqualityElim(identity, premise, parse(target)).conclusion,
                     parse(target),
                 )
 
     def test_elim_runs_in_the_other_direction_too(self):
+        """One rule, not two: the conclusion says which way it was read."""
         identity = Assumption(parse("a=b"))
         premise = Assumption(parse("Rbb"))
+        for target in ("Rab", "Rba", "Raa", "Rbb"):
+            with self.subTest(target=target):
+                self.assertEqual(
+                    EqualityElim(identity, premise, parse(target)).conclusion,
+                    parse(target),
+                )
+
+    def test_elim_reads_either_direction_off_the_same_two_subproofs(self):
+        """a=b over Rab reaches Raa by one reading and Rbb by the other."""
+        identity, premise = Assumption(parse("a=b")), Assumption(parse("Rab"))
         self.assertEqual(
-            EqualityElim2(identity, premise, parse("Rab")).conclusion, parse("Rab")
+            EqualityElim(identity, premise, parse("Rbb")).conclusion, parse("Rbb")
         )
-        self.assertRefuses(
-            MismatchError, "is not",
-            EqualityElim1, identity, premise, parse("Rab"),
+        self.assertEqual(
+            EqualityElim(identity, premise, parse("Raa")).conclusion, parse("Raa")
         )
 
     def test_elim_refuses_an_unrelated_conclusion(self):
         self.assertRefuses(
-            MismatchError, "occurrences of a replaced by b",
-            EqualityElim1,
+            MismatchError, "occurrences of a replaced by b, or of b by a",
+            EqualityElim,
             Assumption(parse("a=b")),
             Assumption(parse("Raa")),
             parse("Rac"),
@@ -429,7 +467,7 @@ class TestIdentity(RuleTestCase):
     def test_elim_needs_an_identity(self):
         self.assertRefuses(
             ShapeError, "must conclude with an identity",
-            EqualityElim1,
+            EqualityElim,
             Assumption(parse("P")),
             Assumption(parse("Q")),
             parse("Q"),
@@ -437,7 +475,7 @@ class TestIdentity(RuleTestCase):
 
     def test_identity_is_symmetric(self):
         # a=b |- b=a, by replacing the first a in a=a.
-        proof = EqualityElim1(
+        proof = EqualityElim(
             Assumption(parse("a=b")), EqualityIntro(self.a), parse("b=a")
         )
         self.assertEqual(proof.conclusion, parse("b=a"))
@@ -447,7 +485,7 @@ class TestIdentity(RuleTestCase):
         identity = Assumption(parse("a=b"))
         premise = Assumption(parse("Fa & Ax(Gx -> Rxa)"))
         self.assertEqual(
-            EqualityElim1(
+            EqualityElim(
                 identity, premise, parse("Fb & Ax(Gx -> Rxa)")
             ).conclusion,
             parse("Fb & Ax(Gx -> Rxa)"),

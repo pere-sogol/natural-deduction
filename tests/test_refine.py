@@ -23,24 +23,20 @@ CASES = {
     "Assumption": ("P", {}),
     "=Intro": ("a=a", {}),
     "∧Intro": ("P & Q", {}),
-    "∧Elim1": ("P", {"right": "Q"}),
-    "∧Elim2": ("P", {"left": "Q"}),
-    "∨Intro1": ("P | Q", {}),
-    "∨Intro2": ("P | Q", {}),
+    "∧Elim": ("P", {"conjunction": "P & Q"}),
+    "∨Intro": ("P | Q", {"disjunct": "P"}),
     "∨Elim": ("S", {"disjunction": "P | Q"}),
     "→Intro": ("P -> Q", {}),
     "→Elim": ("Q", {"antecedent": "P"}),
     "¬Intro": ("~P", {"witness": "Q"}),
     "¬Elim": ("P", {"witness": "Q"}),
     "↔Intro": ("P <-> Q", {}),
-    "↔Elim1": ("Q", {"other": "P"}),
-    "↔Elim2": ("P", {"other": "Q"}),
+    "↔Elim": ("Q", {"biconditional": "P <-> Q"}),
     "∀Intro": ("Ax x=x", {"constant": "a"}),
     "∀Elim": ("Fa", {"universal": "Ax Fx"}),
     "∃Intro": ("Ex Fx", {"constant": "a"}),
     "∃Elim": ("P", {"existential": "Ex Fx", "constant": "a"}),
-    "=Elim1": ("Rbb", {"identity": "a=b"}),
-    "=Elim2": ("Raa", {"identity": "a=b"}),
+    "=Elim": ("Rbb", {"identity": "a=b"}),
 }
 
 #: Subgoals some rules cannot have closed by a bare assumption.  ``AIntro``
@@ -94,7 +90,7 @@ class TestRoundTrip(RefineTestCase):
 class TestShapeGating(RefineTestCase):
     def test_an_introduction_refuses_a_goal_of_the_wrong_shape(self):
         for name, wrong in (
-            ("∧Intro", "P | Q"), ("∨Intro1", "P & Q"), ("→Intro", "P & Q"),
+            ("∧Intro", "P | Q"), ("∨Intro", "P & Q"), ("→Intro", "P & Q"),
             ("↔Intro", "P -> Q"), ("¬Intro", "P"), ("∀Intro", "Ex Fx"),
             ("∃Intro", "Ax Fx"), ("=Intro", "P"),
         ):
@@ -109,7 +105,7 @@ class TestShapeGating(RefineTestCase):
 
     def test_an_elimination_will_try_any_goal(self):
         """They are how you get at what you have, so nothing gates them."""
-        for name in ("∧Elim1", "→Elim", "¬Elim", "∨Elim"):
+        for name in ("∧Elim", "→Elim", "¬Elim", "∨Elim"):
             self.assertIsInstance(fields(name, parse("P & Q"), Context()), tuple)
 
 
@@ -181,25 +177,24 @@ class TestUniversalElimination(RefineTestCase):
 
 
 class TestIdentityElimination(RefineTestCase):
-    def test_the_source_defaults_to_undoing_the_replacement(self):
-        refinement = refine("=Elim1", parse("Rbb"), Context(),
-                            {"identity": "a=b"})
-        self.assertEqual(
-            [str(s.target) for s in refinement.subgoals], ["a=b", "Raa"]
-        )
+    def sources(self, goal, **inputs):
+        inputs.setdefault("identity", "a=b")
+        refinement = refine("=Elim", parse(goal), Context(), inputs)
+        return [str(subgoal.target) for subgoal in refinement.subgoals]
 
-    def test_the_other_direction_defaults_the_other_way(self):
-        refinement = refine("=Elim2", parse("Raa"), Context(),
-                            {"identity": "a=b"})
-        self.assertEqual(
-            [str(s.target) for s in refinement.subgoals], ["a=b", "Rbb"]
-        )
+    def test_the_source_defaults_to_undoing_the_replacement(self):
+        self.assertEqual(self.sources("Rbb"), ["a=b", "Raa"])
+
+    def test_the_default_is_whichever_direction_actually_rewrites(self):
+        """One rule reads the identity both ways; undoing Rbb gives nothing."""
+        self.assertEqual(self.sources("Raa"), ["a=b", "Rbb"])
+
+    def test_a_goal_holding_both_constants_offers_the_first_direction(self):
+        self.assertEqual(self.sources("Rab"), ["a=b", "Raa"])
 
     def test_a_source_may_be_given_instead(self):
         """Replacement is of some occurrences, so the default is only one."""
-        refinement = refine("=Elim1", parse("Rbb"), Context(),
-                            {"identity": "a=b", "source": "Rab"})
-        self.assertEqual(refinement.subgoals[1].target, parse("Rab"))
+        self.assertEqual(self.sources("Rbb", source="Rab")[1], "Rab")
 
 
 class TestSuggestions(RefineTestCase):
@@ -253,10 +248,10 @@ class TestMissingInput(RefineTestCase):
 class TestProbe(RefineTestCase):
     def test_it_reports_every_rule_with_a_reason_when_unavailable(self):
         found = dict((p.rule, p) for p in probe(parse("P & Q"), Context()))
-        self.assertEqual(len(found), 21)
+        self.assertEqual(len(found), 17)
         self.assertTrue(found["∧Intro"].available)
-        self.assertFalse(found["∨Intro1"].available)
-        self.assertIn("disjunction", found["∨Intro1"].reason)
+        self.assertFalse(found["∨Intro"].available)
+        self.assertIn("disjunction", found["∨Intro"].reason)
 
     def test_classical_negation_is_offered_for_any_goal(self):
         """It is how excluded middle is reached, so it must never be hidden."""

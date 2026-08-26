@@ -36,6 +36,7 @@ from nd.formula import Formula
 from nd.proofs import rule
 from nd.render import layout
 
+from ndweb.attempt import UNFINISHED
 from ndweb.catalogue import SCHEMA
 from ndweb.derivation import Goal, Node, Step, parameters
 from ndweb.realise import Realisation, realise
@@ -249,12 +250,14 @@ def _node(
     failure = realisation.failures.get(node_id)
     status = "ok"
     if failure is not None:
-        status = "pending" if failure.kind == "blocked" else failure.kind
+        status = "pending" if failure.kind in UNFINISHED else failure.kind
     elif node_id not in realisation.proofs:
         status = "pending"
     # A step waiting on an unfinished branch is the ordinary state of a
-    # proof being built, not something to be told about.
-    message = "" if failure is None or status == "pending" else failure.message
+    # proof being built, not something to be told about.  An empty
+    # parameter is drawn the same way but does get a line, because no
+    # amount of work above will ever fill it in.
+    message = "" if failure is None or failure.kind == "blocked" else failure.message
 
     return {
         "id": node_id,

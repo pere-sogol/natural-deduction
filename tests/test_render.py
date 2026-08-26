@@ -7,7 +7,7 @@ from nd.formula import Constant, Variable, reset_arities
 from nd.parser import parse
 from nd.render import layout, to_text
 from nd.rules import (
-    AndElim1,
+    AndElim,
     AndIntro,
     Assumption,
     EqualityIntro,
@@ -19,8 +19,7 @@ from nd.rules import (
     NotElim,
     NotIntro,
     OrElim,
-    OrIntro1,
-    OrIntro2,
+    OrIntro,
 )
 
 
@@ -168,17 +167,18 @@ class TestDrawing(RenderTestCase):
         )
 
     def test_no_line_carries_trailing_space(self):
+        excluded = parse("P | ~P")
         proof = NotElim(
-            OrIntro2(
+            OrIntro(
                 NotIntro(
-                    OrIntro1(Assumption(parse("P")), parse("~P")),
+                    OrIntro(Assumption(parse("P")), excluded),
                     Assumption(parse("~(P | ~P)")),
                     parse("P"),
                 ),
-                parse("P"),
+                excluded,
             ),
             Assumption(parse("~(P | ~P)")),
-            parse("P | ~P"),
+            excluded,
         )
         for line in to_text(proof).split("\n"):
             self.assertEqual(line, line.rstrip())
@@ -295,7 +295,7 @@ class TestPlacementOrder(RenderTestCase):
             Assumption(p),
             EqualityIntro(self.a),
             AndIntro(Assumption(p), Assumption(q)),
-            AndElim1(AndIntro(Assumption(p), Assumption(q))),
+            AndElim(AndIntro(Assumption(p), Assumption(q)), p),
             ImpliesIntro(conditional, p),
             OrElim(
                 Assumption(q),

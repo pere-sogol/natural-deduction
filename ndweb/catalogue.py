@@ -26,24 +26,21 @@ SUMMARIES = {
     "Assumption": "Assume a sentence. It stays open until some rule discharges it.",
     "=Intro": "Any constant is identical to itself: write c = c, resting on nothing.",
     "∧Intro": "From φ and ψ, conclude φ ∧ ψ.",
-    "∧Elim1": "From φ ∧ ψ, conclude φ.",
-    "∧Elim2": "From φ ∧ ψ, conclude ψ.",
-    "∨Intro1": "From φ, conclude φ ∨ ψ for any ψ you choose.",
-    "∨Intro2": "From ψ, conclude φ ∨ ψ for any φ you choose.",
+    "∧Elim": "From φ ∧ ψ, conclude either conjunct: φ, or ψ.",
+    "∨Intro": "From φ, conclude any disjunction with φ as one of its halves.",
     "∨Elim": "Proof by cases: if φ ∨ ψ, and χ follows from each, conclude χ.",
     "→Intro": "Prove φ while assuming ψ, then conclude ψ → φ and discharge ψ.",
     "→Elim": "From ψ and ψ → φ, conclude φ.",
     "¬Intro": "Assume φ and reach a contradiction, then conclude ¬φ.",
     "¬Elim": "Assume ¬φ and reach a contradiction, then conclude φ.",
     "↔Intro": "Prove each half from the other, then conclude φ ↔ ψ.",
-    "↔Elim1": "From φ ↔ ψ and φ, conclude ψ.",
-    "↔Elim2": "From φ ↔ ψ and ψ, conclude φ.",
+    "↔Elim": "From φ ↔ ψ and either half, conclude the other.",
     "∀Intro": "From φ proved of an arbitrary c, conclude ∀v φ.",
     "∀Elim": "From ∀v φ, conclude φ with any constant put for v.",
     "∃Intro": "From φ with c in it, conclude ∃v φ.",
     "∃Elim": "From ∃v φ, and χ proved from a fresh instance of φ, conclude χ.",
-    "=Elim1": "From c₁ = c₂ and a sentence, replace occurrences of c₁ by c₂.",
-    "=Elim2": "From c₁ = c₂ and a sentence, replace occurrences of c₂ by c₁.",
+    "=Elim": "From c₁ = c₂ and a sentence, replace occurrences of either "
+             "constant by the other.",
 }
 
 #: Each rule's own figure: the premises above the bar, what it concludes,
@@ -57,35 +54,36 @@ SCHEMA = {
     "Assumption": ((), "φ", ()),
     "=Intro": ((), "c = c", ()),
     "∧Intro": (("φ", "ψ"), "φ ∧ ψ", ()),
-    "∧Elim1": (("φ ∧ ψ",), "φ", ()),
-    "∧Elim2": (("φ ∧ ψ",), "ψ", ()),
-    "∨Intro1": (("φ",), "φ ∨ ψ", ()),
-    "∨Intro2": (("ψ",), "φ ∨ ψ", ()),
+    "∧Elim": (("φ ∧ ψ",), "φ", ()),
+    "∨Intro": (("φ",), "φ ∨ ψ", ()),
     "∨Elim": (("χ", "χ", "φ ∨ ψ"), "χ", ("φ", "ψ", None)),
     "→Intro": (("ψ",), "φ → ψ", ("φ",)),
     "→Elim": (("φ", "φ → ψ"), "ψ", ()),
     "¬Intro": (("ψ", "¬ψ"), "¬φ", ("φ", "φ")),
     "¬Elim": (("ψ", "¬ψ"), "φ", ("¬φ", "¬φ")),
     "↔Intro": (("ψ", "φ"), "φ ↔ ψ", ("φ", "ψ")),
-    "↔Elim1": (("φ ↔ ψ", "φ"), "ψ", ()),
-    "↔Elim2": (("φ ↔ ψ", "ψ"), "φ", ()),
+    "↔Elim": (("φ ↔ ψ", "φ"), "ψ", ()),
     "∀Intro": (("φ(c)",), "∀v φ(v)", ()),
     "∀Elim": (("∀v φ(v)",), "φ(c)", ()),
     "∃Intro": (("φ(c)",), "∃v φ(v)", ()),
     "∃Elim": (("∃v φ(v)", "χ"), "χ", (None, "φ(c)")),
-    "=Elim1": (("c = d", "φ(c)"), "φ(d)", ()),
-    "=Elim2": (("c = d", "φ(d)"), "φ(c)", ()),
+    "=Elim": (("c = d", "φ(c)"), "φ(d)", ()),
 }
 
 #: The provisos worth warning about before a student runs into them.
 CAVEATS = {
+    "∧Elim": "Either conjunct will do; say which by writing it under the bar.",
+    "∨Intro": "The other half can be anything at all; write the whole "
+              "disjunction under the bar and it is settled.",
+    "↔Elim": "Either half will do; the one you put above decides what it "
+             "concludes.",
     "∀Intro": "c must be arbitrary: absent from every assumption still open.",
     "∃Elim": "c must be fresh: absent from the existential, from the conclusion, "
              "and from every other assumption still open.",
     "∃Intro": "Replaces some occurrences, not necessarily all: Raa gives ∃x Rxa "
               "as well as ∃x Rxx.",
-    "=Elim1": "Replaces some occurrences, not necessarily all.",
-    "=Elim2": "Replaces some occurrences, not necessarily all.",
+    "=Elim": "Replaces some occurrences, not necessarily all, and runs in "
+             "whichever direction the sentence you write calls for.",
 }
 
 _CONNECTIVES = ("∧", "∨", "→", "↔", "¬", "∀", "∃", "=")

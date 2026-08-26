@@ -16,7 +16,7 @@ from nd.proofs import (
     rule_catalogue,
 )
 from nd.rules import (
-    AndElim1,
+    AndElim,
     AndIntro,
     Assumption,
     EqualityIntro,
@@ -108,12 +108,12 @@ class TestStructure(ProofTestCase):
         self.assertEqual(Assumption(self.p).length(), 1)
         conjunction = AndIntro(Assumption(self.p), Assumption(self.q))
         self.assertEqual(conjunction.length(), 2)
-        self.assertEqual(AndElim1(conjunction).length(), 3)
+        self.assertEqual(AndElim(conjunction, self.p).length(), 3)
 
     def test_size_counts_every_node(self):
         conjunction = AndIntro(Assumption(self.p), Assumption(self.q))
         self.assertEqual(conjunction.size(), 3)
-        self.assertEqual(AndElim1(conjunction).size(), 4)
+        self.assertEqual(AndElim(conjunction, self.p).size(), 4)
 
     def test_constants_and_predicates_span_the_whole_tree(self):
         proof = ImpliesElim(
@@ -158,11 +158,23 @@ class TestInvariants(ProofTestCase):
         self.assertEqual(len({first, second}), 1)
 
     def test_different_rules_reaching_one_conclusion_differ(self):
-        # P follows from P ^ P either way, but the proofs are not the same.
-        conjunction = AndIntro(Assumption(self.p), Assumption(self.p))
-        from nd.rules import AndElim2
+        # Both reach ~P from the same contradictory pair, discharging
+        # different things on the way; the rule is part of the identity.
+        from nd.formula import Not
+        from nd.rules import NotElim, NotIntro
 
-        self.assertNotEqual(AndElim1(conjunction), AndElim2(conjunction))
+        psi, not_psi = Assumption(self.q), Assumption(Not(self.q))
+        self.assertNotEqual(
+            NotIntro(psi, not_psi, self.p), NotElim(psi, not_psi, Not(self.p))
+        )
+
+    def test_one_rule_reaching_two_conclusions_differs_from_itself(self):
+        # ^Elim is one rule taking either conjunct, so the conjunct taken
+        # is what tells the two proofs apart.
+        conjunction = AndIntro(Assumption(self.p), Assumption(self.q))
+        self.assertNotEqual(
+            AndElim(conjunction, self.p), AndElim(conjunction, self.q)
+        )
 
     def test_the_discharged_sentence_is_part_of_a_proof_s_identity(self):
         subproof = Assumption(self.p)
@@ -180,7 +192,7 @@ class TestRegistry(ProofTestCase):
     """What a user interface builds its palette from."""
 
     def test_every_rule_is_registered_under_both_spellings(self):
-        self.assertEqual(len(rule_catalogue()), 21)
+        self.assertEqual(len(rule_catalogue()), 17)
         for cls in rule_catalogue():
             self.assertIs(rule(cls.name), cls)
             self.assertIs(rule(cls.__name__), cls)
@@ -188,7 +200,7 @@ class TestRegistry(ProofTestCase):
     def test_unknown_rule_names_list_the_known_ones(self):
         with self.assertRaises(KeyError) as caught:
             rule("∧Elim3")
-        self.assertIn("∧Elim1", str(caught.exception))
+        self.assertIn("∧Elim, ∧Intro", str(caught.exception))
 
     def test_apply_builds_by_name(self):
         proof = apply("∧Intro", [Assumption(self.p), Assumption(self.q)])
@@ -205,9 +217,9 @@ class TestRegistry(ProofTestCase):
         self.assertIsNone(
             can_apply("∧Intro", [Assumption(self.p), Assumption(self.q)])
         )
-        error = can_apply("∧Elim1", [Assumption(self.p)])
+        error = can_apply("∧Elim", [Assumption(self.p)], conclusion=self.p)
         self.assertIsInstance(error, ShapeError)
-        self.assertEqual(error.rule_name, "∧Elim1")
+        self.assertEqual(error.rule_name, "∧Elim")
         self.assertIn("conjunction", error.message)
 
     def test_can_apply_catches_provisos_too(self):
@@ -228,7 +240,7 @@ class TestRegistry(ProofTestCase):
 
     def test_subproof_counts_are_declared(self):
         self.assertEqual(rule("Assumption").subproof_count, 0)
-        self.assertEqual(rule("∧Elim1").subproof_count, 1)
+        self.assertEqual(rule("∧Elim").subproof_count, 1)
         self.assertEqual(rule("∧Intro").subproof_count, 2)
         self.assertEqual(rule("∨Elim").subproof_count, 3)
 
