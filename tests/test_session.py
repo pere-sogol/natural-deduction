@@ -298,6 +298,28 @@ class TestJoiningAndParting(SessionTestCase):
         )
         self.assertEqual([c for c in state["cards"] if c["root"] == loose][0]["x"], 500)
 
+    def test_the_slot_left_behind_is_a_node_of_its_own(self):
+        """Pulling a branch off makes two nodes, so it must make two ids.
+
+        The slot and the block now loose beside it shared one until this
+        was fixed, and an id addresses a node across the whole sheet: the
+        next thing written into the slot was written into the block that
+        had just been pulled out of it as well.
+        """
+        state, loose = self.two_blocks()
+        slot = state["cards"][0]["tree"]["premises"][0]["id"]
+        state = self.go(op="attach", slot=slot, source=loose)
+        state = self.go(op="detach", node=loose, x=500, y=500)
+
+        gap = state["cards"][0]["tree"]["premises"][0]["id"]
+        self.assertNotEqual(gap, loose)
+        state = self.go(op="set", node=gap, text="S")
+        self.assertEqual(
+            state["cards"][0]["tree"]["premises"][0]["conclusion"]["text"], "S"
+        )
+        pulled = [c for c in state["cards"] if c["root"] == loose][0]
+        self.assertEqual(pulled["tree"]["conclusion"]["text"], "P")
+
     def test_deleting_a_branch_leaves_an_empty_slot(self):
         state, loose = self.two_blocks()
         slot = state["cards"][0]["tree"]["premises"][0]["id"]

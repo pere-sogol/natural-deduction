@@ -1,15 +1,18 @@
 /* The editor's shell: start Python, forward events, set what comes back.
  *
- * All the logic is in Python.  This file owns two pieces of state of its
- * own -- what the pointer is dragging, and whether an inline editor is
- * open -- and nothing else; even the selected slot lives in the session,
- * so that a refresh of the view cannot disagree with it.
+ * All the logic is in Python.  This file owns three pieces of state of its
+ * own -- the rule the palette is holding, the block the pointer is
+ * dragging, and whether an inline editor is open -- and nothing else; even
+ * the selected slot lives in the session, so that a refresh of the view
+ * cannot disagree with it.
  */
 "use strict";
 
 let dispatch = null;   // the Python entry point
 let state = null;      // the last view
-let held = null;       // {kind: "rule"|"card"|"branch", value, dx, dy}
+let held = null;       // a rule from the palette: {kind: "rule", value}
+let drag = null;       // a block under the pointer; see grab() for its shape
+let dragged = false;   // the last gesture moved something: swallow its click
 let editing = false;   // an inline editor is open; do not repaint under it
 
 const $ = id => document.getElementById(id);
@@ -143,6 +146,147 @@ function sheetPoint(event) {
   };
 }
 
+/* -- picking a block up ---------------------------------------------------- */
+
+/* One gesture, two jobs, and where it starts decides which: on the bar of
+ * a step or on the handle beside it, it pulls that branch out of the block
+ * it is in; anywhere else on the card, it slides the whole card.  Nothing
+ * happens at all until the pointer has travelled, so a click that lands on
+ * a sentence still selects it and a second still opens it for typing.
+ *
+ * This is done with pointer events rather than the browser's own drag and
+ * drop, which cannot make a whole card draggable without also making the
+ * text inside it unselectable in the inline editor -- and which gives the
+ * block no way to follow the pointer while it is being carried.
+ *
+ * The gesture is followed on ``window`` and *never* takes pointer capture,
+ * which looks like the obvious way to do it and quietly breaks the page.
+ * A captured pointer sends its compatibility mouse events to the capturing
+ * element, and a click's target is the common ancestor of its mousedown
+ * and its mouseup -- so capturing on ``pointerdown``, before it is known
+ * whether this is a drag at all, makes every click on the sheet report the
+ * sheet.  Slots stop selecting, the bin and the pull handle stop
+ * answering, and nothing says why. */
+const THRESHOLD = 7;
+
+function grab(event) {
+  const card = event.target.closest(".card");
+  if (!card) return null;
+  const root = Number(card.dataset.root);
+  const handle = event.target.closest(".pull, .bar");
+  const branch = handle ? handle.closest(".inf") : null;
+
+  /* The block's own bar has no branch above it to pull off -- what is over
+   * it is the whole card -- so grabbing that slides the card like the rest
+   * of it does. */
+  const pulling = branch && Number(branch.dataset.id) !== root;
+  const from = pulling ? branch : card;
+  const box = from.getBoundingClientRect();
+  return {
+    kind: pulling ? "branch" : "card",
+    id: pulling ? Number(branch.dataset.id) : root,
+    card: card, from: from, live: false,
+    dx: event.clientX - box.left, dy: event.clientY - box.top,
+    origin: { x: event.clientX, y: event.clientY },
+  };
+}
+
+/* A card carries itself.  A branch cannot -- it is set inside a figure
+ * that would reflow around the gap -- so it travels as a copy, and the
+ * block it is leaving keeps its shape until the pointer says where. */
+function lift(hold) {
+  hold.live = true;
+  document.body.classList.add("grabbing");
+  if (hold.kind === "card") {
+    hold.moving = hold.card;
+    hold.card.classList.add("lifted");
+    return;
+  }
+  const ghost = el("div", "ghost");
+  ghost.appendChild(hold.from.cloneNode(true));
+  document.body.appendChild(ghost);
+  const inside = ghost.firstChild.getBoundingClientRect();
+  const outside = ghost.getBoundingClientRect();
+  hold.pad = { x: inside.left - outside.left, y: inside.top - outside.top };
+  hold.moving = ghost;
+  hold.from.classList.add("pulling");
+}
+
+function slide(hold, event) {
+  if (hold.kind === "card") {
+    const at = sheetPoint(event);
+    hold.moving.style.left = Math.max(0, at.x - hold.dx) + "px";
+    hold.moving.style.top = Math.max(0, at.y - hold.dy) + "px";
+  } else {
+    hold.moving.style.left = (event.clientX - hold.dx - hold.pad.x) + "px";
+    hold.moving.style.top = (event.clientY - hold.dy - hold.pad.y) + "px";
+  }
+}
+
+/* The slot under the pointer, if it is one this block could go into.  What
+ * is being carried has its pointer events off, so the page underneath
+ * answers honestly about what is beneath it. */
+function slotUnder(hold, event) {
+  const under = document.elementFromPoint(event.clientX, event.clientY);
+  const slot = under ? under.closest('.inf[data-kind="slot"] .slot') : null;
+  return slot && !hold.from.contains(slot) ? slot : null;
+}
+
+function mark(slot) {
+  document.querySelectorAll(".slot.dropping")
+    .forEach(n => n.classList.remove("dropping"));
+  if (slot) slot.classList.add("dropping");
+}
+
+/* Putting it down.  ``keep`` is false when the gesture was called off, and
+ * then the repaint puts the card back where the model still says it is. */
+function release(hold, event, keep) {
+  /* Asked before the block is put down, because it is what is being
+   * carried that is in the way: it answers with pointer events off. */
+  const slot = hold.live && keep ? slotUnder(hold, event) : null;
+
+  document.body.classList.remove("grabbing");
+  document.querySelectorAll(".lifted, .pulling")
+    .forEach(n => n.classList.remove("lifted", "pulling"));
+  if (hold.kind === "branch" && hold.moving) hold.moving.remove();
+  mark(null);
+  if (!hold.live) return;
+  dragged = true;
+  if (!keep) { paint(); return; }
+
+  const target = slot ? Number(slot.dataset.slot) : null;
+  const at = sheetPoint(event);
+  if (hold.kind === "card") {
+    if (target !== null) send({ op: "attach", slot: target, source: hold.id });
+    else send({ op: "move", root: hold.id,
+                x: Math.max(0, at.x - hold.dx), y: Math.max(0, at.y - hold.dy) });
+    return;
+  }
+  send({ op: "detach", node: hold.id,
+         x: Math.max(0, at.x - hold.dx - hold.pad.x),
+         y: Math.max(0, at.y - hold.dy - hold.pad.y) });
+  /* Pulled out of one block and put straight into another: two operations,
+   * because the sheet has no single one for it.  The branch keeps its own
+   * number when it comes off, so the second knows what to look for. */
+  if (target !== null) send({ op: "attach", slot: target, source: hold.id });
+}
+
+/* Clicking the handle instead of dragging it.  The branch still has to go
+ * somewhere, so it goes beside the block it came out of, at its own
+ * height -- never on top of it, because a block underneath another one
+ * looks like a block that has been thrown away. */
+function pullOut(handle) {
+  const sheet = $("sheet");
+  const card = handle.closest(".card").getBoundingClientRect();
+  const branch = handle.closest(".inf").getBoundingClientRect();
+  const box = sheet.getBoundingClientRect();
+  send({
+    op: "detach", node: Number(handle.dataset.pull),
+    x: Math.round(card.right - box.left + sheet.scrollLeft + 24),
+    y: Math.max(0, Math.round(branch.top - box.top + sheet.scrollTop - 12)),
+  });
+}
+
 /* -- events ---------------------------------------------------------------- */
 
 function wire() {
@@ -180,30 +324,58 @@ function wire() {
     if (held && !held.sticky) held = null;
   });
 
-  /* A card is moved by its grip; a branch is pulled out of a block by
-   * dragging its bar.  Both land on the sheet as a card of their own. */
-  sheet.addEventListener("dragstart", event => {
-    const grip = event.target.closest("[data-grip]");
-    if (grip) {
-      const card = grip.closest(".card");
-      const box = card.getBoundingClientRect();
-      held = {
-        kind: "card", value: Number(grip.dataset.grip),
-        dx: event.clientX - box.left, dy: event.clientY - box.top,
-      };
-      card.classList.add("dragging");
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", grip.dataset.grip);
-      return;
-    }
-    const bar = event.target.closest(".bar");
-    if (!bar) return;
-    const inference = bar.closest(".inf");
-    held = { kind: "branch", value: Number(inference.dataset.id), dx: 0, dy: 0 };
-    inference.classList.add("dragging");
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", inference.dataset.id);
+  /* A card is picked up anywhere on it, and a branch by the bar of its
+   * step or the handle beside it.  Both land on the sheet as a card of
+   * their own, or in a slot if one is under the pointer at the end. */
+  sheet.addEventListener("pointerdown", event => {
+    if (event.button !== 0) return;
+    dragged = false;
+    /* An open editor commits on the way out and the view is repainted
+     * under us, so there would be nothing left to carry. */
+    if (editing) return;
+    if (event.target.closest("input, .bin, .param")) return;
+    const hold = grab(event);
+    if (!hold) return;
+    hold.pointer = event.pointerId;
+    drag = hold;
+    window.addEventListener("pointermove", follow);
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", abandon);
   });
+
+  function follow(event) {
+    const hold = drag;
+    if (!hold || event.pointerId !== hold.pointer) return;
+    /* The button was let go somewhere we never heard about -- over another
+     * window, say.  Without this the block would take up following the
+     * pointer again the moment it came back over the sheet. */
+    if (!event.buttons) { stop(event, false); return; }
+    if (!hold.live) {
+      const gone = Math.abs(event.clientX - hold.origin.x)
+                 + Math.abs(event.clientY - hold.origin.y);
+      if (gone < THRESHOLD) return;
+      lift(hold);
+    }
+    slide(hold, event);
+    mark(slotUnder(hold, event));
+  }
+
+  function drop(event) {
+    if (drag && event.pointerId === drag.pointer) stop(event, true);
+  }
+
+  function abandon(event) {
+    if (drag && event.pointerId === drag.pointer) stop(event, false);
+  }
+
+  function stop(event, keep) {
+    const hold = drag;
+    drag = null;
+    window.removeEventListener("pointermove", follow);
+    window.removeEventListener("pointerup", drop);
+    window.removeEventListener("pointercancel", abandon);
+    release(hold, event, keep);
+  }
 
   sheet.addEventListener("dragover", event => {
     if (!held) return;
@@ -214,6 +386,8 @@ function wire() {
     if (slot) slot.classList.add("dropping");
   });
 
+  /* Only a rule from the palette arrives this way now; blocks already on
+   * the sheet are carried by the pointer instead. */
   sheet.addEventListener("drop", event => {
     if (!held) return;
     event.preventDefault();
@@ -221,28 +395,22 @@ function wire() {
       n.classList.remove("dropping"));
     const where = sheetPoint(event);
     const slot = event.target.closest('.inf[data-kind="slot"] .slot');
-    const target = slot ? Number(slot.dataset.slot) : null;
-
-    if (held.kind === "rule") {
-      place(held.value, target, where.x, where.y);
-    } else if (held.kind === "card") {
-      if (target !== null) send({ op: "attach", slot: target, source: held.value });
-      else send({
-        op: "move", root: held.value,
-        x: where.x - (held.dx || 0), y: where.y - (held.dy || 0),
-      });
-    } else if (held.kind === "branch") {
-      send({ op: "detach", node: held.value, x: where.x, y: where.y });
-    }
+    place(held.value, slot ? Number(slot.dataset.slot) : null, where.x, where.y);
     if (!held.sticky) held = null;
     palette.querySelectorAll(".armed").forEach(n => n.classList.remove("armed"));
   });
 
   sheet.addEventListener("click", event => {
     if (event.target.closest("input")) return;
+    /* The gesture that ended here moved a block, so whatever it finished
+     * on top of was not being clicked. */
+    if (dragged) { dragged = false; return; }
 
     const bin = event.target.closest("[data-bin]");
     if (bin) { send({ op: "delete", node: Number(bin.dataset.bin) }); return; }
+
+    const pull = event.target.closest("[data-pull]");
+    if (pull) { pullOut(pull); return; }
 
     const chip = event.target.closest("[data-param]");
     if (chip) { editParam(chip); return; }
@@ -354,6 +522,7 @@ function wire() {
       event.preventDefault();
       send({ op: event.shiftKey ? "redo" : "undo" });
     } else if (event.key === "Escape") {
+      if (drag) { stop(event, false); return; }
       held = null;
       document.querySelectorAll(".armed").forEach(n => n.classList.remove("armed"));
       send({ op: "focus", node: null });

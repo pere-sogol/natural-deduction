@@ -349,6 +349,63 @@ fit is allowed, and the bar then says what it actually proves. Refusing would
 leave the student holding a block with nowhere to put it and no explanation;
 `Step.claim` turns it into a located *drift* error instead.
 
+**Parting them gives the slot left behind a number of its own.** `detach_node`
+names it after the branch it replaces, which is right for one tree and wrong for
+a sheet: an id addresses a node across the whole document, so a slot sharing its
+number with the block now lying loose beside it made `_op_set` write into both,
+and `find` answer with whichever came first. `_op_detach` spends a fresh id on
+the gap, which is why it takes one from the document rather than calling
+`detach_node` and being done. `tests/test_session.py` pins it.
+
+### Picking a block up
+
+**The palette drags with the browser's drag and drop; the sheet drags with
+pointer events.** They look like one mechanism and are not, because they want
+different things. A rule leaving the palette is a *copy* crossing from one pane
+to another, which is what `dragstart`/`drop` is for, and clicking to arm it is
+the touch and keyboard path. A block already on the sheet has to be picked up
+*anywhere on itself* — `draggable` on the card would make the inline editor's
+own text unselectable — and it has to follow the pointer while carried, which
+drag and drop cannot do. So `grab`/`lift`/`slide`/`release` in `web/app.js` own
+the sheet, and nothing on a card is `draggable` any more.
+
+**Nothing happens until the pointer has travelled.** `THRESHOLD` is what lets a
+sentence stay a click target: press and release on a slot and it selects, press
+again and it opens for typing, exactly as before. A gesture that did move sets
+`dragged`, and the click that follows it is swallowed — reset on the next
+`pointerdown`, so it can never eat a later one.
+
+**The gesture is followed on `window`, and never takes pointer capture.**
+`setPointerCapture` is the obvious way to write this and it silently breaks the
+page. A captured pointer sends its compatibility mouse events to the *capturing*
+element, and a click's target is the common ancestor of its `mousedown` and its
+`mouseup` — so capturing on `pointerdown`, before it is known whether the press
+is a drag at all, makes every click on the sheet report the sheet. Slots stop
+selecting and stop opening for typing, the bin and the `⤴` stop answering, and
+nothing throws or is logged. `tests/test_page.py` asserts the call is absent,
+because the symptom points nowhere near the cause.
+
+**Where the gesture starts decides which of the two jobs it does.** On the bar
+of a step, or the `⤴` beside it, it pulls that branch out; anywhere else on the
+card, it slides the card. The block's *own* bar is the exception and slides the
+card, because there is nothing above it to pull off. Only the innermost branch
+under the pointer shows a handle — `.inf:has(.inf:hover)` hides the ancestors'
+— or a figure five deep would sprout five of them.
+
+**A card carries itself and a branch carries a copy.** A card is already
+absolutely placed, so the drag writes its `left`/`top` and the drop sends
+`move`. A branch is set inside a figure that would reflow around the gap, so a
+`.ghost` clone follows the pointer and the block it is leaving keeps its shape
+until the drop sends `detach`. Dropped on a slot it is `detach` and then
+`attach`: two operations, because the sheet has no single one for it, and the
+branch keeps its own number when it comes off so the second knows what to ask
+for.
+
+**What is being carried has its pointer events off**, which is the whole of how
+`slotUnder` works: `elementFromPoint` is asked what is under the pointer, and
+the block in hand must not be the answer. `release` therefore asks *before* it
+puts the block down, not after.
+
 ### Setting, not drawing
 
 **`nd/render.py` is no longer what the page uses, and still earns its keep.**
