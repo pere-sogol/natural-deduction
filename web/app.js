@@ -157,8 +157,17 @@ function sheetPoint(event) {
  * This is done with pointer events rather than the browser's own drag and
  * drop, which cannot make a whole card draggable without also making the
  * text inside it unselectable in the inline editor -- and which gives the
- * block no way to follow the pointer while it is being carried. */
-const THRESHOLD = 5;
+ * block no way to follow the pointer while it is being carried.
+ *
+ * The gesture is followed on ``window`` and *never* takes pointer capture,
+ * which looks like the obvious way to do it and quietly breaks the page.
+ * A captured pointer sends its compatibility mouse events to the capturing
+ * element, and a click's target is the common ancestor of its mousedown
+ * and its mouseup -- so capturing on ``pointerdown``, before it is known
+ * whether this is a drag at all, makes every click on the sheet report the
+ * sheet.  Slots stop selecting, the bin and the pull handle stop
+ * answering, and nothing says why. */
+const THRESHOLD = 7;
 
 function grab(event) {
   const card = event.target.closest(".card");
@@ -329,12 +338,18 @@ function wire() {
     if (!hold) return;
     hold.pointer = event.pointerId;
     drag = hold;
-    sheet.setPointerCapture(event.pointerId);
+    window.addEventListener("pointermove", follow);
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", abandon);
   });
 
-  sheet.addEventListener("pointermove", event => {
+  function follow(event) {
     const hold = drag;
     if (!hold || event.pointerId !== hold.pointer) return;
+    /* The button was let go somewhere we never heard about -- over another
+     * window, say.  Without this the block would take up following the
+     * pointer again the moment it came back over the sheet. */
+    if (!event.buttons) { stop(event, false); return; }
     if (!hold.live) {
       const gone = Math.abs(event.clientX - hold.origin.x)
                  + Math.abs(event.clientY - hold.origin.y);
@@ -343,25 +358,24 @@ function wire() {
     }
     slide(hold, event);
     mark(slotUnder(hold, event));
-  });
+  }
 
-  sheet.addEventListener("pointerup", event => {
+  function drop(event) {
+    if (drag && event.pointerId === drag.pointer) stop(event, true);
+  }
+
+  function abandon(event) {
+    if (drag && event.pointerId === drag.pointer) stop(event, false);
+  }
+
+  function stop(event, keep) {
     const hold = drag;
-    if (!hold || event.pointerId !== hold.pointer) return;
     drag = null;
-    release(hold, event, true);
-  });
-
-  /* Either of these can be the end of it, and the second is the one that
-   * fires when the pointer is taken away rather than lifted -- without it
-   * a card could be left carried, with nothing to put it down. */
-  ["pointercancel", "lostpointercapture"].forEach(name =>
-    sheet.addEventListener(name, event => {
-      const hold = drag;
-      if (!hold || event.pointerId !== hold.pointer) return;
-      drag = null;
-      release(hold, event, false);
-    }));
+    window.removeEventListener("pointermove", follow);
+    window.removeEventListener("pointerup", drop);
+    window.removeEventListener("pointercancel", abandon);
+    release(hold, event, keep);
+  }
 
   sheet.addEventListener("dragover", event => {
     if (!held) return;
@@ -508,12 +522,7 @@ function wire() {
       event.preventDefault();
       send({ op: event.shiftKey ? "redo" : "undo" });
     } else if (event.key === "Escape") {
-      if (drag) {
-        const hold = drag;
-        drag = null;
-        release(hold, event, false);
-        return;
-      }
+      if (drag) { stop(event, false); return; }
       held = null;
       document.querySelectorAll(".armed").forEach(n => n.classList.remove("armed"));
       send({ op: "focus", node: null });

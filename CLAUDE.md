@@ -375,6 +375,16 @@ again and it opens for typing, exactly as before. A gesture that did move sets
 `dragged`, and the click that follows it is swallowed — reset on the next
 `pointerdown`, so it can never eat a later one.
 
+**The gesture is followed on `window`, and never takes pointer capture.**
+`setPointerCapture` is the obvious way to write this and it silently breaks the
+page. A captured pointer sends its compatibility mouse events to the *capturing*
+element, and a click's target is the common ancestor of its `mousedown` and its
+`mouseup` — so capturing on `pointerdown`, before it is known whether the press
+is a drag at all, makes every click on the sheet report the sheet. Slots stop
+selecting and stop opening for typing, the bin and the `⤴` stop answering, and
+nothing throws or is logged. `tests/test_page.py` asserts the call is absent,
+because the symptom points nowhere near the cause.
+
 **Where the gesture starts decides which of the two jobs it does.** On the bar
 of a step, or the `⤴` beside it, it pulls that branch out; anywhere else on the
 card, it slides the card. The block's *own* bar is the exception and slides the

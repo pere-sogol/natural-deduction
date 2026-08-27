@@ -151,6 +151,24 @@ class TestTheHandles(PageTestCase):
         self.assertTrue(read, "the check found nothing to check")
         self.assertEqual(sorted(read - written), [])
 
+    def test_dragging_a_block_does_not_take_pointer_capture(self):
+        """Capture is how the drag was first written, and it broke clicking.
+
+        A captured pointer sends its compatibility mouse events to the
+        capturing element, and a click's target is the common ancestor of
+        its mousedown and its mouseup.  Capturing on ``pointerdown`` --
+        before it is known whether the press is a drag at all -- therefore
+        makes every click on the sheet report the sheet: a slot can no
+        longer be selected or opened for typing, and the bin and the pull
+        handle stop answering.  Nothing throws and nothing is logged.  The
+        gesture is followed on ``window`` instead.
+        """
+        self.assertNotIn("setPointerCapture", self.app)
+        for name in ("pointermove", "pointerup", "pointercancel"):
+            self.assertRegex(
+                self.app, r"window\.addEventListener\(\"{0}\"".format(name), name
+            )
+
     def test_every_operation_the_shell_sends_is_one_the_session_handles(self):
         from ndweb.session import Session
 
